@@ -1,0 +1,126 @@
+
+export const mockDeals = [
+  {
+    id: '1',
+    title: 'Campanha Instagram - Ana Silva',
+    client_id: '1',
+    client_name: 'Ana Silva',
+    assigned_to: null,
+    assigned_name: '',
+    stage: 'no_contact',
+    value: 15000,
+    description: 'Campanha de lançamento de coleção primavera',
+    priority: 'high',
+    expected_close_date: '2024-04-15',
+    created_at: '2024-03-01'
+  },
+  {
+    id: '2',
+    title: 'Parceria YouTube - Carlos Mendes',
+    client_id: '2',
+    client_name: 'Carlos Mendes',
+    assigned_to: null,
+    assigned_name: '',
+    stage: 'contact_made',
+    value: 45000,
+    description: 'Série de vídeos patrocinados sobre tecnologia',
+    priority: 'high',
+    expected_close_date: '2024-04-20',
+    created_at: '2024-02-28'
+  },
+  {
+    id: '3',
+    title: 'Contrato TikTok - Beatriz Costa',
+    client_id: '3',
+    client_name: 'Beatriz Costa',
+    assigned_to: null,
+    assigned_name: '',
+    stage: 'needs_identified',
+    value: 32000,
+    description: 'Renovação de contrato anual de conteúdo',
+    priority: 'medium',
+    expected_close_date: '2024-05-01',
+    created_at: '2024-03-05'
+  },
+  {
+    id: '4',
+    title: 'Plano Fitness - Diego Oliveira',
+    client_id: '4',
+    client_name: 'Diego Oliveira',
+    assigned_to: null,
+    assigned_name: '',
+    stage: 'presentation',
+    value: 28000,
+    description: 'Pacote de conteúdo fitness para Q2',
+    priority: 'medium',
+    expected_close_date: '2024-04-30',
+    created_at: '2024-03-08'
+  },
+  {
+    id: '5',
+    title: 'Comédia Viral - Gabriel Santos',
+    client_id: '6',
+    client_name: 'Gabriel Santos',
+    assigned_to: null,
+    assigned_name: '',
+    stage: 'no_contact',
+    value: 55000,
+    description: 'Campanha viral com série de esquetes',
+    priority: 'low',
+    expected_close_date: '2024-05-15',
+    created_at: '2024-03-10'
+  },
+  {
+    id: '6',
+    title: 'Makeup Collection - Helena Rodrigues',
+    client_id: '7',
+    client_name: 'Helena Rodrigues',
+    assigned_to: null,
+    assigned_name: '',
+    stage: 'contact_made',
+    value: 22000,
+    description: 'Lançamento de linha de maquiagem',
+    priority: 'high',
+    expected_close_date: '2024-04-25',
+    created_at: '2024-03-02'
+  },
+  {
+    id: '7',
+    title: 'Gaming Setup - Igor Ferreira',
+    client_id: '8',
+    client_name: 'Igor Ferreira',
+    assigned_to: null,
+    assigned_name: '',
+    stage: 'needs_identified',
+    value: 38000,
+    description: 'Parceria com marca de periféricos gaming',
+    priority: 'medium',
+    expected_close_date: '2024-05-10',
+    created_at: '2024-03-07'
+  },
+  {
+    id: '8',
+    title: 'Receitas Gourmet - Fernanda Lima',
+    client_id: '5',
+    client_name: 'Fernanda Lima',
+    assigned_to: null,
+    assigned_name: '',
+    stage: 'presentation',
+    value: 18000,
+    description: 'Série de receitas com produtos orgânicos',
+    priority: 'low',
+    expected_close_date: '2024-05-20',
+    created_at: '2024-03-12'
+  }
+];
+
+export const kanbanStages = [
+  { id: 'no_contact', label: 'Sem contato', color: '#94a3b8' },
+  { id: 'contact_made', label: 'Contato feito', color: '#38bdf8' },
+  { id: 'needs_identified', label: 'Identificação do interesse', color: '#fbbf24' },
+  { id: 'presentation', label: 'Apresentação', color: '#a78bfa' },
+  { id: 'proposal', label: 'Proposta enviada', color: '#fb923c' },
+  { id: 'negotiation', label: 'Negociação', color: '#f472b6' },
+  { id: 'won', label: 'Ganho', color: '#34d399' },
+  { id: 'lost', label: 'Perdido', color: '#f87171' }
+];

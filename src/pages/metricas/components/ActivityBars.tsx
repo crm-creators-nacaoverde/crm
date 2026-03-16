@@ -1,0 +1,46 @@
+import { Client } from '../../../lib/supabase';
+
+interface ActivityBarsProps {
+  clients: Client[];
+  totalInteractions: number;
+}
+
+export default function ActivityBars({ clients, totalInteractions }: ActivityBarsProps) {
+  const activeCount = clients.filter(c => c.status === 'active').length;
+  const activityRate = clients.length > 0 ? (activeCount / clients.length) * 100 : 0;
+  const avgInteractions = clients.length > 0 ? totalInteractions / clients.length : 0;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Taxa de Atividade */}
+      <div className="bg-gradient-to-r from-[#004aad] to-[#003d91] rounded-xl p-5 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-8 translate-x-8"></div>
+        <div className="flex items-center justify-between relative z-10">
+          <div>
+            <p className="text-sm font-medium text-white/70">Taxa de Atividade</p>
+            <p className="text-3xl font-bold mt-1">{activityRate.toFixed(1)}%</p>
+            <p className="text-xs text-white/50 mt-1">Creators ativos no sistema</p>
+          </div>
+          <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center">
+            <i className="ri-pulse-line text-2xl text-white"></i>
+          </div>
+        </div>
+      </div>
+
+      {/* Média de Interações */}
+      <div className="bg-gradient-to-r from-orange-400 to-orange-500 rounded-xl p-5 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-8 translate-x-8"></div>
+        <div className="flex items-center justify-between relative z-10">
+          <div>
+            <p className="text-sm font-medium text-orange-100">Média de Interações</p>
+            <p className="text-3xl font-bold mt-1">{avgInteractions.toFixed(1)}</p>
+            <p className="text-xs text-orange-200 mt-1">Por creator</p>
+          </div>
+          <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center">
+            <i className="ri-chat-3-line text-2xl text-white"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
