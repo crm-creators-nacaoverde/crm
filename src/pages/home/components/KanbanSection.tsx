@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useActivityLog } from '../../../hooks/useActivityLog';
+import { useClientHistory, historyEvent } from '../../../hooks/useClientHistory';
 import KanbanToolbar from './KanbanToolbar';
 import KanbanColumn from './KanbanColumn';
 import KanbanDealModal from './KanbanDealModal';
@@ -81,20 +82,21 @@ export default function KanbanSection() {
   const [automationsStage, setAutomationsStage] = useState<{ id: string; label: string; color: string } | null>(null);
   const [exportToast, setExportToast] = useState(false);
   const [hideClosedStages, setHideClosedStages] = useState(loadHideClosed);
+
   const { user } = useAuth();
   const { logActivity } = useActivityLog();
+  const { logClientEvent } = useClientHistory();
   const { executeAutomations } = useStageAutomations();
-  
+
   const canDeleteDeals = useAuth().hasPermission('deals', 'delete');
-  
-  // Hooks de funis
-  const { 
-    funnels, 
-    loading: funnelsLoading, 
-    selectedFunnelId, 
-    selectFunnel 
+
+  const {
+    funnels,
+    loading: funnelsLoading,
+    selectedFunnelId,
+    selectFunnel
   } = useFunnels();
-  
+
   const { stages, loading: stagesLoading, saveStages, reloadStages } = useFunnelStages(selectedFunnelId || undefined);
 
   const loadData = useCallback(async () => {
@@ -144,7 +146,6 @@ export default function KanbanSection() {
     loadData();
   }, [loadData]);
 
-  // Filtrar deals pelo funil selecionado
   const filteredDealsByFunnel = deals.filter(deal => deal.funnel_id === selectedFunnelId);
 
   const filteredDeals = filteredDealsByFunnel.filter(deal => {
@@ -211,7 +212,7 @@ export default function KanbanSection() {
           .update({ ...data, updated_at: new Date().toISOString() })
           .eq('id', selectedDeal.id);
         if (error) throw error;
-        
+
         await logActivity({
           action: 'update',
           module: 'deals',
@@ -222,15 +223,15 @@ export default function KanbanSection() {
       } else {
         const { data: newDeal, error } = await supabase
           .from('deals')
-          .insert([{ 
-            ...data, 
+          .insert([{
+            ...data,
             created_by: user?.id,
-            funnel_id: selectedFunnelId 
+            funnel_id: selectedFunnelId
           }])
           .select()
           .single();
         if (error) throw error;
-        
+
         await logActivity({
           action: 'create',
           module: 'deals',
@@ -238,6 +239,14 @@ export default function KanbanSection() {
           entityName: (data.title as string) || 'Nova negociação',
           details: { data }
         });
+
+        // ── Registrar criação de acompanhamento no histórico do creator ──────
+        if (data.client_id) {
+          await logClientEvent({
+            client_id: data.client_id as string,
+            ...historyEvent.acompanhamentoCriado((data.title as string) || 'Nova negociação'),
+          });
+        }
       }
       await loadData();
       setIsModalOpen(false);
@@ -251,7 +260,7 @@ export default function KanbanSection() {
       const dealToDelete = deals.find(d => d.id === id);
       const { error } = await supabase.from('deals').delete().eq('id', id);
       if (error) throw error;
-      
+
       if (dealToDelete) {
         await logActivity({
           action: 'delete',
@@ -260,8 +269,16 @@ export default function KanbanSection() {
           entityName: dealToDelete.title,
           details: { deletedData: dealToDelete }
         });
+
+        // ── Registrar exclusão do acompanhamento no histórico do creator ─────
+        if (dealToDelete.client_id) {
+          await logClientEvent({
+            client_id: dealToDelete.client_id,
+            ...historyEvent.exclusaoDado('Acompanhamento', dealToDelete.title),
+          });
+        }
       }
-      
+
       await loadData();
     } catch (error) {
       console.error('Erro ao excluir negociação:', error);
@@ -284,21 +301,34 @@ export default function KanbanSection() {
           .update({ stage: stageId, updated_at: new Date().toISOString() })
           .eq('id', draggedDeal.id);
         if (error) throw error;
-        
+
         const oldStage = stages.find(s => s.id === draggedDeal.stage);
         const newStage = stages.find(s => s.id === stageId);
-        
+
+        // ── Log global de atividade ──────────────────────────────────────────
         await logActivity({
           action: 'update',
           module: 'deals',
           entityId: draggedDeal.id,
           entityName: draggedDeal.title,
-          details: { 
+          details: {
             action: 'move_stage',
             from: oldStage?.label || draggedDeal.stage,
-            to: newStage?.label || stageId
+            to: newStage?.label || stageId,
           }
         });
+
+        // ── Registrar movimentação no histórico do creator ───────────────────
+        if (draggedDeal.client_id) {
+          await logClientEvent({
+            client_id: draggedDeal.client_id,
+            ...historyEvent.movimentacao(
+              oldStage?.label || draggedDeal.stage,
+              newStage?.label || stageId,
+              draggedDeal.title,
+            ),
+          });
+        }
 
         // 🤖 Disparar automações configuradas para esta etapa
         await executeAutomations(
@@ -309,7 +339,7 @@ export default function KanbanSection() {
           draggedDeal.client_name || '',
           newStage?.label || stageId
         );
-        
+
         await loadData();
       } catch (error) {
         console.error('Erro ao mover negociação:', error);
@@ -324,7 +354,6 @@ export default function KanbanSection() {
     setDragOverStage(null);
   };
 
-  // --- Export CSV ---
   const handleExport = () => {
     const selectedFunnel = funnels.find(f => f.id === selectedFunnelId);
     const csvData = filteredDeals.map(deal => {
@@ -357,20 +386,18 @@ export default function KanbanSection() {
     link.click();
   };
 
-  // --- Reload ---
   const handleReload = async () => {
     setIsReloading(true);
     await Promise.all([loadData(), reloadStages()]);
     setTimeout(() => setIsReloading(false), 600);
   };
 
-  // --- Funnel Config ---
   const handleSaveFunnel = async (newStages: { id: string; label: string; color: string }[]) => {
     const mapped = newStages.map((s, i) => ({
       id: s.id,
       label: s.label,
       color: s.color,
-      description: s.description ?? null,
+      description: (s as any).description ?? null,
       sort_order: i,
       is_fixed: s.id === 'won' || s.id === 'lost',
       funnel_id: selectedFunnelId,
@@ -391,7 +418,6 @@ export default function KanbanSection() {
     : stages;
 
   const getStageDeals = (stageId: string) => sortedDeals.filter(d => d.stage === stageId);
-
   const getTotalValue = () => deals.reduce((sum, d) => sum + Number(d.value ?? 0), 0);
   const getStageValue = (stageId: string) =>
     getStageDeals(stageId).reduce((sum, d) => sum + Number(d.value ?? 0), 0);
@@ -505,7 +531,6 @@ export default function KanbanSection() {
         onClose={() => setIsFunnelManagerOpen(false)}
       />
 
-      {/* StageAutomationsModal */}
       {automationsStage && (
         <StageAutomationsModal
           isOpen={!!automationsStage}
@@ -517,7 +542,6 @@ export default function KanbanSection() {
         />
       )}
 
-      {/* Export toast */}
       {exportToast && (
         <div className="fixed bottom-6 right-6 z-50 animate-[fadeIn_0.2s_ease-out]">
           <div className="flex items-center gap-3 bg-gray-900 text-white px-5 py-3.5 rounded-xl shadow-2xl">
