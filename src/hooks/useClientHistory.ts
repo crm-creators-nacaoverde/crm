@@ -1,4 +1,5 @@
 // src/hooks/useClientHistory.ts
+import { useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -44,7 +45,7 @@ export function useClientHistory() {
    * Registra um evento no histórico do creator.
    * Chame isso em QUALQUER ação que afete um creator específico.
    */
-  async function logClientEvent(params: LogClientEventParams): Promise<void> {
+  const logClientEvent = useCallback(async (params: LogClientEventParams): Promise<void> => {
     try {
       await supabase.from('client_history').insert({
         client_id: params.client_id,
@@ -59,12 +60,12 @@ export function useClientHistory() {
       // Nunca bloquear a ação principal por falha no log
       console.warn('[ClientHistory] Falha ao registrar evento:', err);
     }
-  }
+  }, [profile?.id, profile?.full_name, profile?.email]);
 
   /**
    * Busca todos os eventos de um creator ordenados do mais recente ao mais antigo.
    */
-  async function fetchClientHistory(clientId: string): Promise<ClientHistoryEntry[]> {
+  const fetchClientHistory = useCallback(async (clientId: string): Promise<ClientHistoryEntry[]> => {
     const { data, error } = await supabase
       .from('client_history')
       .select('*')
@@ -76,7 +77,7 @@ export function useClientHistory() {
       return [];
     }
     return data as ClientHistoryEntry[];
-  }
+  }, []); // supabase é estável, sem dependências variáveis
 
   return { logClientEvent, fetchClientHistory };
 }
