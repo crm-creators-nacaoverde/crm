@@ -4,6 +4,7 @@ import Button from '../../../components/base/Button';
 import { Client, supabase } from '../../../lib/supabase';
 import { useNotificationContext } from '../../../contexts/NotificationContext';
 import { useActivityLog } from '../../../hooks/useActivityLog';
+import { useClientHistory, historyEvent } from '../../../hooks/useClientHistory';
 
 interface ClientModalProps {
   isOpen: boolean;
@@ -56,9 +57,53 @@ const validateCpfCnpj = (value: string): boolean => {
   return digits.length === 11 || digits.length === 14 || digits.length === 0;
 };
 
+// Labels legíveis para cada campo no histórico
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Nome',
+  phone: 'Telefone',
+  cpf_cnpj: 'CPF/CNPJ',
+  platform: 'Plataforma',
+  category: 'Categoria',
+  instagram_profile: 'Instagram',
+  youtube_canal: 'YouTube',
+  gmv_geral: 'GMV Geral',
+  produtos_divulgados: 'Produtos Divulgados',
+  comissao_organica: 'Comissão Orgânica',
+  comissao_trafego: 'Comissão Tráfego',
+  gmv_interno_7d: 'GMV 7d',
+  gmv_interno_14d: 'GMV 14d',
+  gmv_interno_28d: 'GMV 28d',
+  gmv_interno_30d: 'GMV 30d',
+  whatsapp_group_link: 'Link WhatsApp',
+  videos_7d: 'Vídeos 7d',
+  videos_14d: 'Vídeos 14d',
+  videos_28d: 'Vídeos 28d',
+  videos_30d: 'Vídeos 30d',
+  lives_7d: 'Lives 7d',
+  lives_14d: 'Lives 14d',
+  lives_28d: 'Lives 28d',
+  lives_30d: 'Lives 30d',
+  status: 'Status',
+  endereco_cep: 'CEP',
+  endereco_rua: 'Rua',
+  endereco_numero: 'Número',
+  endereco_complemento: 'Complemento',
+  endereco_bairro: 'Bairro',
+  endereco_cidade: 'Cidade',
+  endereco_estado: 'Estado',
+  chave_pix: 'Chave PIX',
+  chave_pix_tipo: 'Tipo PIX',
+  codigo_rastreio: 'Código de Rastreio',
+  amostra_enviada: 'Amostra Enviada',
+  amostra_data_envio: 'Data de Envio',
+  amostra_observacao: 'Observação da Amostra',
+};
+
 export default function ClientModal({ isOpen, onClose, client, onSave }: ClientModalProps) {
   const { sendNotification } = useNotificationContext();
   const { logActivity } = useActivityLog();
+  const { logClientEvent } = useClientHistory();
+
   const [activeTab, setActiveTab] = useState<TabId>('obrigatorio');
   const [tiktokLinks, setTiktokLinks] = useState<string[]>(['']);
   const [gmvPeriod, setGmvPeriod] = useState<'7' | '14' | '28' | '30'>('7');
@@ -265,22 +310,136 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
     };
   };
 
+  // ─── Detecta quais grupos de campos foram alterados no modo edição ───────────
+  const detectChanges = (payload: ReturnType<typeof buildPayload>) => {
+    if (!client) return { dadosCadastrais: [], metricas: [], pix: false, amostra: false };
+
+    const dadosCadastraisKeys = [
+      'name', 'phone', 'cpf_cnpj', 'platform', 'category',
+      'instagram_profile', 'youtube_canal', 'produtos_divulgados',
+      'status', 'whatsapp_group_link',
+    ];
+    const metricasKeys = [
+      'gmv_geral', 'gmv_interno_7d', 'gmv_interno_14d', 'gmv_interno_28d', 'gmv_interno_30d',
+      'comissao_organica', 'comissao_trafego',
+      'videos_7d', 'videos_14d', 'videos_28d', 'videos_30d',
+      'lives_7d', 'lives_14d', 'lives_28d', 'lives_30d',
+    ];
+    const pixKeys = ['chave_pix', 'chave_pix_tipo'];
+    const amostraKeys = ['amostra_enviada', 'amostra_data_envio', 'amostra_observacao', 'codigo_rastreio'];
+
+    const changed = (keys: string[]) =>
+      keys.filter(k => String((payload as any)[k] ?? '') !== String((client as any)[k] ?? ''));
+
+    const dadosCadastrais = changed(dadosCadastraisKeys).map(k => FIELD_LABELS[k] ?? k);
+    const metricas = changed(metricasKeys).map(k => FIELD_LABELS[k] ?? k);
+    const pix = changed(pixKeys).length > 0;
+    const amostra = changed(amostraKeys).length > 0;
+
+    return { dadosCadastrais, metricas, pix, amostra };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
     const payload = buildPayload();
+
     try {
       if (client) {
+        // ── MODO EDIÇÃO ──────────────────────────────────────────────────────
         const { error } = await supabase.from('clients').update(payload).eq('id', client.id);
         if (error) throw error;
+
         sendNotification('Creator Atualizado', { body: `${form.name} foi atualizado com sucesso.` });
-        await logActivity({ action: 'update', module: 'creators', entityId: client.id, entityName: form.name, details: { fields: Object.keys(payload) } });
+        await logActivity({
+          action: 'update', module: 'creators',
+          entityId: client.id, entityName: form.name,
+          details: { fields: Object.keys(payload) },
+        });
+
+        // ── Registrar no histórico do creator o que mudou ────────────────────
+        const { dadosCadastrais, metricas, pix, amostra } = detectChanges(payload);
+
+        if (dadosCadastrais.length > 0) {
+          await logClientEvent({
+            client_id: client.id,
+            ...historyEvent.edicaoDados(dadosCadastrais),
+          });
+        }
+
+        if (metricas.length > 0) {
+          const metaObj: Record<string, unknown> = {};
+          metricas.forEach(label => { metaObj[label] = ''; });
+          await logClientEvent({
+            client_id: client.id,
+            ...historyEvent.resultadoAtualizado(
+              Object.fromEntries(
+                metricas.map(label => [label, (payload as any)[
+                  Object.keys(FIELD_LABELS).find(k => FIELD_LABELS[k] === label) ?? ''
+                ] ?? ''])
+              )
+            ),
+          });
+        }
+
+        if (pix && form.chave_pix && form.chave_pix_tipo) {
+          await logClientEvent({
+            client_id: client.id,
+            ...historyEvent.pixAtualizado(form.chave_pix_tipo, form.chave_pix),
+          });
+        }
+
+        if (amostra) {
+          if (form.amostra_enviada && !client.amostra_enviada) {
+            // Marcou como enviada agora
+            await logClientEvent({
+              client_id: client.id,
+              ...historyEvent.amostraEnviada(form.codigo_rastreio || undefined),
+            });
+          } else {
+            // Atualizou dados da amostra
+            await logClientEvent({
+              client_id: client.id,
+              ...historyEvent.amostraAtualizada(form.amostra_observacao || undefined),
+            });
+          }
+        }
+
       } else {
-        const { error, data: newData } = await supabase.from('clients').insert([payload]).select('id').single();
+        // ── MODO CRIAÇÃO ─────────────────────────────────────────────────────
+        const { error, data: newData } = await supabase
+          .from('clients').insert([payload]).select('id').single();
         if (error) throw error;
+
         sendNotification('Novo Creator Adicionado! 🎉', { body: `${form.name} foi cadastrado com sucesso.` });
-        await logActivity({ action: 'create', module: 'creators', entityId: newData?.id, entityName: form.name });
+        await logActivity({
+          action: 'create', module: 'creators',
+          entityId: newData?.id, entityName: form.name,
+        });
+
+        // ── Registrar cadastro no histórico ───────────────────────────────────
+        await logClientEvent({
+          client_id: newData!.id,
+          ...historyEvent.cadastro(form.name),
+        });
+
+        // Se já veio com PIX preenchido
+        if (form.chave_pix && form.chave_pix_tipo) {
+          await logClientEvent({
+            client_id: newData!.id,
+            ...historyEvent.pixAtualizado(form.chave_pix_tipo, form.chave_pix),
+          });
+        }
+
+        // Se já veio com amostra marcada
+        if (form.amostra_enviada) {
+          await logClientEvent({
+            client_id: newData!.id,
+            ...historyEvent.amostraEnviada(form.codigo_rastreio || undefined),
+          });
+        }
       }
+
       onSave({});
       onClose();
     } catch (error) {
@@ -298,7 +457,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
   const labelClass = 'block text-xs font-medium text-gray-500 mb-1.5';
   const errorClass = 'text-[11px] text-rose-500 mt-1';
 
-  // Ícone da plataforma selecionada
   const platformIcon: Record<string, string> = {
     TikTok: 'ri-tiktok-line',
     Instagram: 'ri-instagram-line',
@@ -346,7 +504,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         {/* ── TAB: Dados do Creator ── */}
         {activeTab === 'obrigatorio' && (
           <div className="space-y-4">
-            {/* Nome + Telefone */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Nome <span className="text-rose-500">*</span></label>
@@ -369,7 +526,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
-            {/* CPF/CNPJ */}
             <div>
               <label className={labelClass}>CPF / CNPJ</label>
               <div className="relative">
@@ -386,14 +542,12 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               {errors.cpf_cnpj && <p className={errorClass}>{errors.cpf_cnpj}</p>}
             </div>
 
-            {/* ── PLATAFORMAS ── */}
             <div className="bg-gradient-to-r from-[#004aad]/5 to-[#5de0e6]/5 border border-[#5de0e6]/30 rounded-xl p-4 space-y-4">
               <div className="flex items-center gap-2 mb-1">
                 <i className="ri-broadcast-line text-[#004aad] text-base"></i>
                 <span className="text-xs font-semibold text-gray-800">Plataformas e Canais</span>
               </div>
 
-              {/* Categoria */}
               <div>
                 <label className={labelClass}>Categoria <span className="text-rose-500">*</span></label>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -410,7 +564,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 </div>
               </div>
 
-              {/* Plataforma Principal */}
               <div>
                 <label className={labelClass}>Plataforma Principal <span className="text-rose-500">*</span></label>
                 <div className="relative">
@@ -423,7 +576,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 </div>
               </div>
 
-              {/* Links TikTok */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className={`${labelClass} mb-0 flex items-center gap-1.5`}>
@@ -459,7 +611,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 </div>
               </div>
 
-              {/* Instagram */}
               <div>
                 <label className={`${labelClass} flex items-center gap-1.5`}>
                   <i className="ri-instagram-line text-pink-500 text-xs"></i>
@@ -474,7 +625,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 </div>
               </div>
 
-              {/* YouTube */}
               <div>
                 <label className={`${labelClass} flex items-center gap-1.5`}>
                   <i className="ri-youtube-line text-red-500 text-xs"></i>
@@ -490,7 +640,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
-            {/* GMV + Status */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>GMV Geral</label>
@@ -514,7 +663,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
-            {/* Produtos */}
             <div>
               <label className={labelClass}>Produtos Divulgados</label>
               <textarea value={form.produtos_divulgados}
@@ -530,7 +678,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         {/* ── TAB: Endereço / PIX / Amostra ── */}
         {activeTab === 'endereco' && (
           <div className="space-y-5">
-            {/* Endereço */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-map-pin-line text-rose-500"></i>Endereço Completo
@@ -602,7 +749,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
-            {/* PIX */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-bank-card-line text-emerald-500"></i>Chave PIX
@@ -630,7 +776,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
-            {/* Amostra */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-gift-line text-amber-500"></i>Amostra de Produto
@@ -690,7 +835,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
-            {/* Comissão */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-percent-line text-brand-500"></i>Comissão Acordada
@@ -717,7 +861,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
-            {/* GMV */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-money-dollar-circle-line text-emerald-500"></i>GMV Interno
@@ -732,7 +875,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
-            {/* WhatsApp */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-whatsapp-line text-emerald-500"></i>Link do Grupo WhatsApp
@@ -742,7 +884,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 placeholder="https://chat.whatsapp.com/..." className={inputClass} />
             </div>
 
-            {/* Vídeos */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-video-line text-brand-500"></i>Vídeos Feitos
@@ -754,7 +895,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 placeholder="0" className={inputClass} />
             </div>
 
-            {/* Lives */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-live-line text-rose-500"></i>Lives Feitas
