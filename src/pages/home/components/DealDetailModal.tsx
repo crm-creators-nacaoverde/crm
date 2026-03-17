@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabase';
 import { Deal } from './KanbanSection';
 import RequestSampleModal from './RequestSampleModal';
 import DealTasksSection from './DealTasksSection';
+import { useClientHistory, historyEvent, type ClientHistoryEntry } from '../../../hooks/useClientHistory';
 
 interface DealDetailModalProps {
   isOpen: boolean;
@@ -56,24 +57,21 @@ interface ClientFull {
   amostra_enviada: boolean;
   amostra_data_envio: string;
   amostra_observacao: string;
+  created_at: string;
 }
 
 type EditSection = 'endereco' | 'pix' | 'amostra' | 'resultados' | 'contato' | null;
 
-interface HistoryEvent {
-  id: string;
-  action: string;
-  module: string;
-  entity_name: string | null;
-  user_name: string | null;
-  user_email: string | null;
-  details: Record<string, any> | null;
-  created_at: string;
-  source: 'deal' | 'creator' | 'form';
-}
-
 // ─── Bloco de Pagamento — sincronizado com o módulo Financeiro ──────────────
-function PaymentBlock({ clientId, clientName }: { clientId: string; clientName: string }) {
+function PaymentBlock({
+  clientId,
+  clientName,
+  onPaymentSaved,
+}: {
+  clientId: string;
+  clientName: string;
+  onPaymentSaved?: () => void;
+}) {
   const [lastPayment, setLastPayment] = useState<{
     id: string; type: string; amount: number; status: string;
     pix_key: string | null; paid_at: string | null; created_at: string;
@@ -91,30 +89,38 @@ function PaymentBlock({ clientId, clientName }: { clientId: string; clientName: 
   };
 
   const STATUS: Record<string, { label: string; color: string; icon: string }> = {
-    pendente:  { label: 'Pendente',  color: 'text-amber-700 bg-amber-100',   icon: 'ri-time-line' },
+    pendente:  { label: 'Pendente',  color: 'text-amber-700 bg-amber-100',    icon: 'ri-time-line' },
     pago:      { label: 'Pago',      color: 'text-emerald-700 bg-emerald-100', icon: 'ri-checkbox-circle-line' },
-    cancelado: { label: 'Cancelado', color: 'text-rose-700 bg-rose-100',     icon: 'ri-close-circle-line' },
+    cancelado: { label: 'Cancelado', color: 'text-rose-700 bg-rose-100',      icon: 'ri-close-circle-line' },
   };
 
-  const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString('pt-BR') : null;
+  const fmt      = (d: string | null) => d ? new Date(d).toLocaleDateString('pt-BR') : null;
   const fmtMoney = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+  const reloadPayments = useCallback(async () => {
+    setLoading(true);
+    const [lastRes, totalRes] = await Promise.all([
+      supabase.from('creator_payments')
+        .select('id,type,amount,status,pix_key,paid_at,created_at')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase.from('creator_payments')
+        .select('amount')
+        .eq('client_id', clientId)
+        .neq('status', 'cancelado'),
+    ]);
+    setLastPayment(lastRes.data || null);
+    const sum = (totalRes.data || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+    setTotal(sum);
+    setLoading(false);
+  }, [clientId]);
 
   useEffect(() => {
     if (!clientId) return;
-    const load = async () => {
-      setLoading(true);
-      const [lastRes, totalRes] = await Promise.all([
-        supabase.from('creator_payments').select('id,type,amount,status,pix_key,paid_at,created_at')
-          .eq('client_id', clientId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('creator_payments').select('amount').eq('client_id', clientId).neq('status', 'cancelado'),
-      ]);
-      setLastPayment(lastRes.data || null);
-      const sum = (totalRes.data || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-      setTotal(sum);
-      setLoading(false);
-    };
-    load();
-  }, [clientId]);
+    reloadPayments();
+  }, [clientId, reloadPayments]);
 
   const hasPayment = !!lastPayment;
   const t = lastPayment ? (TYPES[lastPayment.type] || TYPES.outro) : null;
@@ -149,14 +155,12 @@ function PaymentBlock({ clientId, clientName }: { clientId: string; clientName: 
         </div>
       ) : hasPayment ? (
         <div className="space-y-2">
-          {/* Total acumulado */}
           {total > 0 && (
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[11px] text-gray-500">Total pago:</span>
               <span className="text-sm font-bold text-[#004aad]">{fmtMoney(total)}</span>
             </div>
           )}
-          {/* Último pagamento */}
           <div className="bg-white/70 rounded-lg px-3 py-2 border border-gray-100">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[10px] text-gray-400 uppercase tracking-wide">Último pagamento</span>
@@ -186,7 +190,6 @@ function PaymentBlock({ clientId, clientName }: { clientId: string; clientName: 
         <p className="text-sm text-gray-400 italic">Nenhum pagamento registrado</p>
       )}
 
-      {/* Mini-modal de novo pagamento */}
       {showNewPayment && (
         <QuickPaymentForm
           clientId={clientId}
@@ -194,20 +197,8 @@ function PaymentBlock({ clientId, clientName }: { clientId: string; clientName: 
           onClose={() => setShowNewPayment(false)}
           onSaved={() => {
             setShowNewPayment(false);
-            // Recarregar bloco
-            setLoading(true);
-            const load = async () => {
-              const [lastRes, totalRes] = await Promise.all([
-                supabase.from('creator_payments').select('id,type,amount,status,pix_key,paid_at,created_at')
-                  .eq('client_id', clientId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-                supabase.from('creator_payments').select('amount').eq('client_id', clientId).neq('status', 'cancelado'),
-              ]);
-              setLastPayment(lastRes.data || null);
-              const sum = (totalRes.data || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
-              setTotal(sum);
-              setLoading(false);
-            };
-            load();
+            reloadPayments();
+            onPaymentSaved?.();
           }}
         />
       )}
@@ -219,11 +210,12 @@ function PaymentBlock({ clientId, clientName }: { clientId: string; clientName: 
 function QuickPaymentForm({
   clientId, clientName, onClose, onSaved,
 }: { clientId: string; clientName: string; onClose: () => void; onSaved: () => void }) {
-  const [type, setType] = useState('premiacao');
+  const [type, setType]     = useState('premiacao');
   const [amount, setAmount] = useState('');
   const [pixKey, setPixKey] = useState('');
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes]   = useState('');
   const [saving, setSaving] = useState(false);
+  const { logClientEvent }  = useClientHistory();
 
   const TYPES = [
     { value: 'premiacao', label: 'Premiação', icon: 'ri-trophy-line' },
@@ -234,7 +226,6 @@ function QuickPaymentForm({
   ];
 
   useEffect(() => {
-    // Puxar PIX do creator
     supabase.from('clients').select('chave_pix').eq('id', clientId).maybeSingle()
       .then(({ data }) => { if (data?.chave_pix) setPixKey(data.chave_pix); });
   }, [clientId]);
@@ -243,13 +234,16 @@ function QuickPaymentForm({
     if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) return;
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
+    const valor = parseFloat(amount);
+
     await supabase.from('creator_payments').insert({
       client_id: clientId, client_name: clientName,
-      type, amount: parseFloat(amount), status: 'pendente',
+      type, amount: valor, status: 'pendente',
       pix_key: pixKey || null, notes: notes || null,
       created_by: user?.id || null,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     });
+
     if (user) {
       await supabase.from('activity_logs').insert({
         user_id: user.id,
@@ -257,9 +251,16 @@ function QuickPaymentForm({
         user_email: user.email || '',
         action: 'create', module: 'financeiro',
         entity_name: clientName,
-        details: { type, amount: parseFloat(amount), source: 'deal_detail' },
+        details: { type, amount: valor, source: 'deal_detail' },
       });
     }
+
+    // ── Registrar no histórico do creator ────────────────────────────────────
+    await logClientEvent({
+      client_id: clientId,
+      ...historyEvent.pagamentoRegistrado(type, valor),
+    });
+
     setSaving(false);
     onSaved();
   };
@@ -270,7 +271,6 @@ function QuickPaymentForm({
     <div className="mt-3 p-3.5 bg-white border border-[#004aad]/20 rounded-xl space-y-3 animate-[fadeIn_0.15s_ease-out]">
       <p className="text-xs font-semibold text-gray-600">Registrar pagamento rápido</p>
 
-      {/* Tipo */}
       <div className="grid grid-cols-5 gap-1">
         {TYPES.map(t => (
           <button key={t.value} type="button" onClick={() => setType(t.value)}
@@ -281,7 +281,6 @@ function QuickPaymentForm({
         ))}
       </div>
 
-      {/* Valor e PIX */}
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="block text-[11px] text-gray-500 mb-1">Valor (R$) *</label>
@@ -295,7 +294,6 @@ function QuickPaymentForm({
         </div>
       </div>
 
-      {/* Observação */}
       <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
         placeholder="Observação (opcional)" className={inp} />
 
@@ -321,99 +319,48 @@ export default function DealDetailModal({
   onEdit,
   onClientUpdated,
 }: DealDetailModalProps) {
-  const [client, setClient] = useState<ClientFull | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'resultados' | 'historico' | 'tarefas'>('info');
-  const [history, setHistory] = useState<HistoryEvent[]>([]);
+  const [client, setClient]               = useState<ClientFull | null>(null);
+  const [loading, setLoading]             = useState(false);
+  const [activeTab, setActiveTab]         = useState<'info' | 'resultados' | 'historico' | 'tarefas'>('info');
+  const [history, setHistory]             = useState<ClientHistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [editSection, setEditSection] = useState<EditSection>(null);
-  const [editData, setEditData] = useState<Partial<ClientFull>>({});
-  const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [editSection, setEditSection]     = useState<EditSection>(null);
+  const [editData, setEditData]           = useState<Partial<ClientFull>>({});
+  const [saving, setSaving]               = useState(false);
+  const [saveSuccess, setSaveSuccess]     = useState<string | null>(null);
   const [showSampleModal, setShowSampleModal] = useState(false);
 
+  const { logClientEvent, fetchClientHistory } = useClientHistory();
+
   const loadClient = useCallback(async () => {
-    if (!deal?.client_id) {
-      setClient(null);
-      return;
-    }
+    if (!deal?.client_id) { setClient(null); return; }
     setLoading(true);
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('id', deal.client_id)
-      .maybeSingle();
-    if (error) {
-      console.error('Failed to fetch client:', error);
-      setClient(null);
-    } else {
-      setClient(data as ClientFull | null);
-    }
+    const { data, error } = await supabase.from('clients').select('*').eq('id', deal.client_id).maybeSingle();
+    if (error) { console.error('Failed to fetch client:', error); setClient(null); }
+    else setClient(data as ClientFull | null);
     setLoading(false);
   }, [deal?.client_id]);
 
+  // ── Histórico agora vem da tabela client_history ─────────────────────────
   const loadHistory = useCallback(async () => {
-    if (!deal) return;
+    if (!deal?.client_id) return;
     setLoadingHistory(true);
-    try {
-      // Buscar logs do deal
-      const { data: dealLogs } = await supabase
-        .from('activity_logs')
-        .select('id, action, module, entity_name, user_name, user_email, details, created_at')
-        .eq('module', 'deals')
-        .eq('entity_id', deal.id)
-        .order('created_at', { ascending: false });
-
-      // Buscar logs do creator vinculado
-      let clientLogs: any[] = [];
-      if (deal.client_id) {
-        const { data } = await supabase
-          .from('activity_logs')
-          .select('id, action, module, entity_name, user_name, user_email, details, created_at')
-          .eq('module', 'creators')
-          .eq('entity_id', deal.client_id)
-          .order('created_at', { ascending: false });
-        clientLogs = data || [];
-      }
-
-      // Buscar submissões de formulários vinculadas ao creator
-      let formLogs: any[] = [];
-      if (deal.client_id) {
-        const { data } = await supabase
-          .from('activity_logs')
-          .select('id, action, module, entity_name, user_name, user_email, details, created_at')
-          .eq('module', 'form_submissions')
-          .eq('entity_id', deal.client_id)
-          .order('created_at', { ascending: false });
-        formLogs = data || [];
-      }
-
-      const allEvents: HistoryEvent[] = [
-        ...(dealLogs || []).map(l => ({ ...l, source: 'deal' as const })),
-        ...clientLogs.map(l => ({ ...l, source: 'creator' as const })),
-        ...formLogs.map(l => ({ ...l, source: 'form' as const })),
-      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-      setHistory(allEvents);
-    } catch (err) {
-      console.error('Erro ao carregar histórico:', err);
-    } finally {
-      setLoadingHistory(false);
-    }
-  }, [deal]);
+    const data = await fetchClientHistory(deal.client_id);
+    setHistory(data);
+    setLoadingHistory(false);
+  }, [deal?.client_id, fetchClientHistory]);
 
   useEffect(() => {
     if (isOpen) {
       loadClient();
       setEditSection(null);
       setSaveSuccess(null);
-      if (activeTab === 'historico') loadHistory();
     }
   }, [isOpen, loadClient]);
 
   useEffect(() => {
     if (activeTab === 'historico' && isOpen) loadHistory();
-  }, [activeTab]);
+  }, [activeTab, isOpen, loadHistory]);
 
   useEffect(() => {
     if (saveSuccess) {
@@ -428,26 +375,16 @@ export default function DealDetailModal({
     setSaveSuccess(null);
 
     if (section === 'contato') {
-      setEditData({
-        phone: client.phone || '',
-        email: client.email || '',
-        cpf_cnpj: client.cpf_cnpj || '',
-      });
+      setEditData({ phone: client.phone || '', email: client.email || '', cpf_cnpj: client.cpf_cnpj || '' });
     } else if (section === 'endereco') {
       setEditData({
-        endereco_cep: client.endereco_cep || '',
-        endereco_rua: client.endereco_rua || '',
-        endereco_numero: client.endereco_numero || '',
-        endereco_complemento: client.endereco_complemento || '',
-        endereco_bairro: client.endereco_bairro || '',
-        endereco_cidade: client.endereco_cidade || '',
+        endereco_cep: client.endereco_cep || '', endereco_rua: client.endereco_rua || '',
+        endereco_numero: client.endereco_numero || '', endereco_complemento: client.endereco_complemento || '',
+        endereco_bairro: client.endereco_bairro || '', endereco_cidade: client.endereco_cidade || '',
         endereco_estado: client.endereco_estado || '',
       });
     } else if (section === 'pix') {
-      setEditData({
-        chave_pix: client.chave_pix || '',
-        chave_pix_tipo: client.chave_pix_tipo || '',
-      });
+      setEditData({ chave_pix: client.chave_pix || '', chave_pix_tipo: client.chave_pix_tipo || '' });
     } else if (section === 'amostra') {
       setEditData({
         amostra_enviada: client.amostra_enviada || false,
@@ -457,62 +394,110 @@ export default function DealDetailModal({
       });
     } else if (section === 'resultados') {
       setEditData({
-        gmv_geral: client.gmv_geral || 0,
-        comissao_organica: client.comissao_organica || 0,
+        gmv_geral: client.gmv_geral || 0, comissao_organica: client.comissao_organica || 0,
         comissao_trafego: client.comissao_trafego || 0,
-        gmv_interno_7d: client.gmv_interno_7d || 0,
-        gmv_interno_14d: client.gmv_interno_14d || 0,
-        gmv_interno_28d: client.gmv_interno_28d || 0,
-        gmv_interno_30d: client.gmv_interno_30d || 0,
-        videos_7d: client.videos_7d || 0,
-        videos_14d: client.videos_14d || 0,
-        videos_28d: client.videos_28d || 0,
-        videos_30d: client.videos_30d || 0,
-        lives_7d: client.lives_7d || 0,
-        lives_14d: client.lives_14d || 0,
-        lives_28d: client.lives_28d || 0,
-        lives_30d: client.lives_30d || 0,
+        gmv_interno_7d: client.gmv_interno_7d || 0, gmv_interno_14d: client.gmv_interno_14d || 0,
+        gmv_interno_28d: client.gmv_interno_28d || 0, gmv_interno_30d: client.gmv_interno_30d || 0,
+        videos_7d: client.videos_7d || 0, videos_14d: client.videos_14d || 0,
+        videos_28d: client.videos_28d || 0, videos_30d: client.videos_30d || 0,
+        lives_7d: client.lives_7d || 0, lives_14d: client.lives_14d || 0,
+        lives_28d: client.lives_28d || 0, lives_30d: client.lives_30d || 0,
         produtos_divulgados: client.produtos_divulgados || '',
-        tiktok_links: client.tiktok_links || [],
-        whatsapp_group_link: client.whatsapp_group_link || '',
+        tiktok_links: client.tiktok_links || [], whatsapp_group_link: client.whatsapp_group_link || '',
       });
     }
   };
 
-  const cancelEdit = () => {
-    setEditSection(null);
-    setEditData({});
-  };
+  const cancelEdit = () => { setEditSection(null); setEditData({}); };
 
   const saveEdit = async () => {
     if (!client) return;
     setSaving(true);
     try {
       const updatePayload: Record<string, unknown> = { ...editData, updated_at: new Date().toISOString() };
-      
-      if (editSection === 'amostra' && editData.amostra_data_envio) {
+
+      if (editSection === 'amostra' && editData.amostra_data_envio)
         updatePayload.amostra_data_envio = new Date(editData.amostra_data_envio as string).toISOString();
-      }
-      if (editSection === 'amostra' && !editData.amostra_data_envio) {
+      if (editSection === 'amostra' && !editData.amostra_data_envio)
         updatePayload.amostra_data_envio = null;
+
+      const { error } = await supabase.from('clients').update(updatePayload).eq('id', client.id);
+      if (error) throw error;
+
+      // ── Registrar no histórico do creator o que foi editado ──────────────
+      if (editSection === 'contato') {
+        const campos = ['Telefone', 'E-mail', 'CPF/CNPJ'].filter((_, i) => {
+          const keys = ['phone', 'email', 'cpf_cnpj'];
+          return String(editData[keys[i] as keyof ClientFull] ?? '') !== String(client[keys[i] as keyof ClientFull] ?? '');
+        });
+        if (campos.length > 0) {
+          await logClientEvent({ client_id: client.id, ...historyEvent.edicaoDados(campos) });
+        }
       }
 
-      const { error } = await supabase
-        .from('clients')
-        .update(updatePayload)
-        .eq('id', client.id);
+      if (editSection === 'endereco') {
+        const endKeys = ['endereco_cep','endereco_rua','endereco_numero','endereco_complemento','endereco_bairro','endereco_cidade','endereco_estado'];
+        const endLabels = ['CEP','Rua','Número','Complemento','Bairro','Cidade','Estado'];
+        const campos = endLabels.filter((_, i) =>
+          String(editData[endKeys[i] as keyof ClientFull] ?? '') !== String(client[endKeys[i] as keyof ClientFull] ?? '')
+        );
+        if (campos.length > 0) {
+          await logClientEvent({ client_id: client.id, ...historyEvent.edicaoDados(campos) });
+        }
+      }
 
-      if (error) throw error;
+      if (editSection === 'pix') {
+        if (editData.chave_pix && (editData.chave_pix !== client.chave_pix || editData.chave_pix_tipo !== client.chave_pix_tipo)) {
+          await logClientEvent({
+            client_id: client.id,
+            ...historyEvent.pixAtualizado(editData.chave_pix_tipo as string, editData.chave_pix as string),
+          });
+        }
+      }
+
+      if (editSection === 'amostra') {
+        const amostraFoiMarcada = editData.amostra_enviada && !client.amostra_enviada;
+        const rastreioMudou = editData.codigo_rastreio !== client.codigo_rastreio;
+
+        if (amostraFoiMarcada) {
+          await logClientEvent({
+            client_id: client.id,
+            ...historyEvent.amostraEnviada(editData.codigo_rastreio as string || undefined),
+          });
+        } else if (rastreioMudou || editData.amostra_observacao !== client.amostra_observacao) {
+          await logClientEvent({
+            client_id: client.id,
+            ...historyEvent.amostraAtualizada(editData.amostra_observacao as string || undefined),
+          });
+        }
+      }
+
+      if (editSection === 'resultados') {
+        const metricasKeys: Record<string, string> = {
+          gmv_geral: 'GMV Geral', comissao_organica: 'Comissão Orgânica', comissao_trafego: 'Comissão Tráfego',
+          gmv_interno_7d: 'GMV 7d', gmv_interno_14d: 'GMV 14d', gmv_interno_28d: 'GMV 28d', gmv_interno_30d: 'GMV 30d',
+          videos_7d: 'Vídeos 7d', videos_14d: 'Vídeos 14d', videos_28d: 'Vídeos 28d', videos_30d: 'Vídeos 30d',
+          lives_7d: 'Lives 7d', lives_14d: 'Lives 14d', lives_28d: 'Lives 28d', lives_30d: 'Lives 30d',
+        };
+        const changed: Record<string, unknown> = {};
+        for (const [key, label] of Object.entries(metricasKeys)) {
+          const newVal = editData[key as keyof ClientFull];
+          const oldVal = client[key as keyof ClientFull];
+          if (String(newVal ?? '') !== String(oldVal ?? '')) changed[label] = newVal;
+        }
+        if (Object.keys(changed).length > 0) {
+          await logClientEvent({ client_id: client.id, ...historyEvent.resultadoAtualizado(changed) });
+        }
+      }
 
       await loadClient();
       if (onClientUpdated) await onClientUpdated();
-      
+
+      // Recarregar histórico se a aba estiver ativa
+      if (activeTab === 'historico') await loadHistory();
+
       const sectionLabels: Record<string, string> = {
-        contato: 'Contato',
-        endereco: 'Endereço',
-        pix: 'PIX',
-        amostra: 'Amostra',
-        resultados: 'Resultados',
+        contato: 'Contato', endereco: 'Endereço', pix: 'PIX', amostra: 'Amostra', resultados: 'Resultados',
       };
       setSaveSuccess(sectionLabels[editSection || ''] || 'Dados');
       setEditSection(null);
@@ -532,9 +517,9 @@ export default function DealDetailModal({
 
   const stage = stages.find((s) => s.id === deal.stage);
   const priorityConfig: Record<string, { label: string; color: string; dot: string }> = {
-    high: { label: 'Alta', color: 'bg-rose-50 text-rose-600', dot: 'bg-rose-500' },
-    medium: { label: 'Média', color: 'bg-amber-50 text-amber-600', dot: 'bg-amber-500' },
-    low: { label: 'Baixa', color: 'bg-emerald-50 text-emerald-600', dot: 'bg-emerald-500' },
+    high:   { label: 'Alta',  color: 'bg-rose-50 text-rose-600',     dot: 'bg-rose-500' },
+    medium: { label: 'Média', color: 'bg-amber-50 text-amber-600',   dot: 'bg-amber-500' },
+    low:    { label: 'Baixa', color: 'bg-emerald-50 text-emerald-600', dot: 'bg-emerald-500' },
   };
   const priority = priorityConfig[deal.priority] || priorityConfig.medium;
 
@@ -542,8 +527,8 @@ export default function DealDetailModal({
     `R$ ${Number(val || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const hasAddress = client && (client.endereco_cep || client.endereco_rua || client.endereco_cidade);
-  const hasPix = client && client.chave_pix;
-  const hasSample = client && (client.codigo_rastreio || client.amostra_enviada);
+  const hasPix     = client && client.chave_pix;
+  const hasSample  = client && (client.codigo_rastreio || client.amostra_enviada);
 
   const fullAddress = client
     ? [
@@ -559,95 +544,63 @@ export default function DealDetailModal({
     : '';
 
   const pixTipoLabel: Record<string, string> = {
-    cpf: 'CPF',
-    cnpj: 'CNPJ',
-    email: 'E-mail',
-    telefone: 'Telefone',
-    aleatoria: 'Chave Aleatória',
+    cpf: 'CPF', cnpj: 'CNPJ', email: 'E-mail', telefone: 'Telefone', aleatoria: 'Chave Aleatória',
   };
 
-  const gmvData = client
-    ? [
-        { label: '7 dias', value: client.gmv_interno_7d, field: 'gmv_interno_7d' },
-        { label: '14 dias', value: client.gmv_interno_14d, field: 'gmv_interno_14d' },
-        { label: '28 dias', value: client.gmv_interno_28d, field: 'gmv_interno_28d' },
-        { label: '30 dias', value: client.gmv_interno_30d, field: 'gmv_interno_30d' },
-      ]
-    : [];
-
-  const videosData = client
-    ? [
-        { label: '7d', value: client.videos_7d, field: 'videos_7d' },
-        { label: '14d', value: client.videos_14d, field: 'videos_14d' },
-        { label: '28d', value: client.videos_28d, field: 'videos_28d' },
-        { label: '30d', value: client.videos_30d, field: 'videos_30d' },
-      ]
-    : [];
-
-  const livesData = client
-    ? [
-        { label: '7d', value: client.lives_7d, field: 'lives_7d' },
-        { label: '14d', value: client.lives_14d, field: 'lives_14d' },
-        { label: '28d', value: client.lives_28d, field: 'lives_28d' },
-        { label: '30d', value: client.lives_30d, field: 'lives_30d' },
-      ]
-    : [];
+  const gmvData     = client ? [
+    { label: '7 dias',  value: client.gmv_interno_7d,  field: 'gmv_interno_7d' },
+    { label: '14 dias', value: client.gmv_interno_14d, field: 'gmv_interno_14d' },
+    { label: '28 dias', value: client.gmv_interno_28d, field: 'gmv_interno_28d' },
+    { label: '30 dias', value: client.gmv_interno_30d, field: 'gmv_interno_30d' },
+  ] : [];
+  const videosData  = client ? [
+    { label: '7d',  value: client.videos_7d,  field: 'videos_7d' },
+    { label: '14d', value: client.videos_14d, field: 'videos_14d' },
+    { label: '28d', value: client.videos_28d, field: 'videos_28d' },
+    { label: '30d', value: client.videos_30d, field: 'videos_30d' },
+  ] : [];
+  const livesData   = client ? [
+    { label: '7d',  value: client.lives_7d,  field: 'lives_7d' },
+    { label: '14d', value: client.lives_14d, field: 'lives_14d' },
+    { label: '28d', value: client.lives_28d, field: 'lives_28d' },
+    { label: '30d', value: client.lives_30d, field: 'lives_30d' },
+  ] : [];
 
   const maxVideos = Math.max(...videosData.map((v) => Number(v.value || 0)), 1);
-  const maxLives = Math.max(...livesData.map((v) => Number(v.value || 0)), 1);
+  const maxLives  = Math.max(...livesData.map((v) => Number(v.value || 0)), 1);
 
   const EditButton = ({ section }: { section: EditSection }) => (
-    <button
-      onClick={(e) => { e.stopPropagation(); startEdit(section); }}
-      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[#004aad] hover:bg-[#5de0e6]/10 rounded-md transition-all cursor-pointer whitespace-nowrap"
-      title="Editar"
-    >
-      <i className="ri-pencil-line text-xs"></i>
-      Editar
+    <button onClick={(e) => { e.stopPropagation(); startEdit(section); }}
+      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[#004aad] hover:bg-[#5de0e6]/10 rounded-md transition-all cursor-pointer whitespace-nowrap">
+      <i className="ri-pencil-line text-xs"></i>Editar
     </button>
   );
 
   const SaveCancelButtons = () => (
     <div className="flex items-center gap-2 mt-3">
-      <button
-        onClick={saveEdit}
-        disabled={saving}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#5de0e6] hover:bg-[#004aad] rounded-lg transition-all cursor-pointer whitespace-nowrap disabled:opacity-50"
-      >
-        {saving ? (
-          <i className="ri-loader-4-line text-xs animate-spin"></i>
-        ) : (
-          <i className="ri-check-line text-xs"></i>
-        )}
+      <button onClick={saveEdit} disabled={saving}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#5de0e6] hover:bg-[#004aad] rounded-lg transition-all cursor-pointer whitespace-nowrap disabled:opacity-50">
+        {saving ? <i className="ri-loader-4-line text-xs animate-spin"></i> : <i className="ri-check-line text-xs"></i>}
         Salvar
       </button>
-      <button
-        onClick={cancelEdit}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all cursor-pointer whitespace-nowrap"
-      >
+      <button onClick={cancelEdit}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all cursor-pointer whitespace-nowrap">
         Cancelar
       </button>
     </div>
   );
 
-  const inputClass = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/20 focus:border-[#5de0e6] transition-all';
-  const labelClass = 'text-[11px] font-medium text-gray-500 mb-1 block';
+  const inputClass  = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/20 focus:border-[#5de0e6] transition-all';
+  const labelClass  = 'text-[11px] font-medium text-gray-500 mb-1 block';
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={deal.title}
-      subtitle="Detalhes do Acompanhamento"
-      size="lg"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={deal.title} subtitle="Detalhes do Acompanhamento" size="lg">
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <i className="ri-loader-4-line text-3xl text-[#5de0e6] animate-spin"></i>
         </div>
       ) : (
         <div className="space-y-5">
-          {/* Toast de sucesso */}
           {saveSuccess && (
             <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl animate-[fadeIn_0.2s_ease-out]">
               <i className="ri-check-double-line text-emerald-500"></i>
@@ -655,28 +608,18 @@ export default function DealDetailModal({
             </div>
           )}
 
-          {/* Header com info do deal */}
+          {/* Header */}
           <div className="flex items-center justify-between bg-gray-50 rounded-xl p-4">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-gradient-to-br from-[#5de0e6] to-[#004aad] rounded-xl flex items-center justify-center shadow-sm">
-                <span className="text-white font-bold text-lg">
-                  {(deal.client_name || 'N').charAt(0).toUpperCase()}
-                </span>
+                <span className="text-white font-bold text-lg">{(deal.client_name || 'N').charAt(0).toUpperCase()}</span>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-gray-900">
-                  {deal.client_name || 'Sem creator'}
-                </h3>
+                <h3 className="text-sm font-semibold text-gray-900">{deal.client_name || 'Sem creator'}</h3>
                 <div className="flex items-center gap-2 mt-1">
                   {stage && (
-                    <span
-                      className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border"
-                      style={{
-                        backgroundColor: `${stage.color}15`,
-                        color: stage.color,
-                        borderColor: `${stage.color}30`,
-                      }}
-                    >
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md border"
+                      style={{ backgroundColor: `${stage.color}15`, color: stage.color, borderColor: `${stage.color}30` }}>
                       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stage.color }}></span>
                       {stage.label}
                     </span>
@@ -688,19 +631,13 @@ export default function DealDetailModal({
                 </div>
               </div>
             </div>
-            <button
-              onClick={() => {
-                onClose();
-                setTimeout(() => onEdit(deal), 200);
-              }}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#004aad] bg-[#5de0e6]/10 hover:bg-[#5de0e6]/20 rounded-lg transition-all cursor-pointer whitespace-nowrap"
-            >
-              <i className="ri-edit-line text-sm"></i>
-              Editar Deal
+            <button onClick={() => { onClose(); setTimeout(() => onEdit(deal), 200); }}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-[#004aad] bg-[#5de0e6]/10 hover:bg-[#5de0e6]/20 rounded-lg transition-all cursor-pointer whitespace-nowrap">
+              <i className="ri-edit-line text-sm"></i>Editar Deal
             </button>
           </div>
 
-          {/* Info rápida do deal */}
+          {/* Info rápida */}
           <div className="grid grid-cols-3 gap-3">
             {deal.assigned_name && (
               <div className="bg-gray-50 rounded-lg p-3">
@@ -737,18 +674,14 @@ export default function DealDetailModal({
             )}
           </div>
 
-          {/* Tags */}
           {deal.tags && deal.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {deal.tags.map((tag) => (
-                <span key={tag} className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-teal-50 text-teal-600 border border-teal-100">
-                  {tag}
-                </span>
+                <span key={tag} className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-teal-50 text-teal-600 border border-teal-100">{tag}</span>
               ))}
             </div>
           )}
 
-          {/* Descrição */}
           {deal.description && (
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-1">Descrição</p>
@@ -758,67 +691,37 @@ export default function DealDetailModal({
 
           {/* Tabs */}
           <div className="flex gap-1 bg-gray-100 rounded-full p-1">
-            <button
-              onClick={() => { setActiveTab('info'); cancelEdit(); }}
-              className={`flex-1 text-sm font-medium py-2 rounded-full transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'info' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <i className="ri-user-line mr-1.5"></i>
-              Endereço / PIX / Amostra
-            </button>
-            <button
-              onClick={() => { setActiveTab('resultados'); cancelEdit(); }}
-              className={`flex-1 text-sm font-medium py-2 rounded-full transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'resultados' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <i className="ri-bar-chart-line mr-1.5"></i>
-              Resultados
-            </button>
-            <button
-              onClick={() => { setActiveTab('historico'); cancelEdit(); }}
-              className={`flex-1 text-sm font-medium py-2 rounded-full transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'historico' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <i className="ri-history-line mr-1.5"></i>
-              Histórico
-            </button>
-            <button
-              onClick={() => { setActiveTab('tarefas'); cancelEdit(); }}
-              className={`flex-1 text-sm font-medium py-2 rounded-full transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'tarefas' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <i className="ri-task-line mr-1.5"></i>
-              Tarefas
-            </button>
+            {(['info','resultados','historico','tarefas'] as const).map(tab => {
+              const icons = { info: 'ri-user-line', resultados: 'ri-bar-chart-line', historico: 'ri-history-line', tarefas: 'ri-task-line' };
+              const labels = { info: 'Endereço / PIX / Amostra', resultados: 'Resultados', historico: 'Histórico', tarefas: 'Tarefas' };
+              return (
+                <button key={tab} onClick={() => { setActiveTab(tab); cancelEdit(); }}
+                  className={`flex-1 text-sm font-medium py-2 rounded-full transition-all cursor-pointer whitespace-nowrap ${
+                    activeTab === tab ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  }`}>
+                  <i className={`${icons[tab]} mr-1.5`}></i>{labels[tab]}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Tab: Info (Endereço / PIX / Amostra) */}
+          {/* ── Tab: Info ── */}
           {activeTab === 'info' && client && (
             <div className="space-y-4">
               {/* Contato */}
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4 flex-wrap">
-                  {editSection !== 'contato' ? (
+                  {editSection !== 'contato' && (
                     <>
                       {client.phone && (
-                        <a
-                          href={`https://wa.me/${client.phone.replace(/\\D/g, '')}`}
-                          target="_blank"
-                          rel="nofollow noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 rounded-lg text-sm text-emerald-700 font-medium transition-all cursor-pointer"
-                        >
-                          <i className="ri-whatsapp-line text-sm"></i>
-                          {client.phone}
+                        <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}`} target="_blank" rel="nofollow noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 rounded-lg text-sm text-emerald-700 font-medium transition-all cursor-pointer">
+                          <i className="ri-whatsapp-line text-sm"></i>{client.phone}
                         </a>
                       )}
                       {client.email && (
                         <span className="inline-flex items-center gap-2 text-sm text-gray-500">
-                          <i className="ri-mail-line text-sm text-gray-400"></i>
-                          {client.email}
+                          <i className="ri-mail-line text-sm text-gray-400"></i>{client.email}
                         </span>
                       )}
                       {client.cpf_cnpj && (
@@ -828,12 +731,10 @@ export default function DealDetailModal({
                         </span>
                       )}
                     </>
-                  ) : null}
+                  )}
                 </div>
                 {editSection !== 'contato' && <EditButton section="contato" />}
               </div>
-
-              {/* Contato - Edição */}
               {editSection === 'contato' && (
                 <div className="bg-teal-50/30 border border-teal-100 rounded-xl p-4 space-y-3 animate-[fadeIn_0.15s_ease-out]">
                   <div className="flex items-center gap-2 mb-1">
@@ -841,18 +742,9 @@ export default function DealDetailModal({
                     <span className="text-xs font-semibold text-teal-700">Editando Contato</span>
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className={labelClass}>Telefone</label>
-                      <input type="text" className={inputClass} value={(editData.phone as string) || ''} onChange={e => updateField('phone', e.target.value)} placeholder="(11) 99999-9999" />
-                    </div>
-                    <div>
-                      <label className={labelClass}>E-mail</label>
-                      <input type="email" className={inputClass} value={(editData.email as string) || ''} onChange={e => updateField('email', e.target.value)} placeholder="email@exemplo.com" />
-                    </div>
-                    <div>
-                      <label className={labelClass}>CPF/CNPJ</label>
-                      <input type="text" className={inputClass} value={(editData.cpf_cnpj as string) || ''} onChange={e => updateField('cpf_cnpj', e.target.value)} placeholder="000.000.000-00" />
-                    </div>
+                    <div><label className={labelClass}>Telefone</label><input type="text" className={inputClass} value={(editData.phone as string) || ''} onChange={e => updateField('phone', e.target.value)} placeholder="(11) 99999-9999" /></div>
+                    <div><label className={labelClass}>E-mail</label><input type="email" className={inputClass} value={(editData.email as string) || ''} onChange={e => updateField('email', e.target.value)} placeholder="email@exemplo.com" /></div>
+                    <div><label className={labelClass}>CPF/CNPJ</label><input type="text" className={inputClass} value={(editData.cpf_cnpj as string) || ''} onChange={e => updateField('cpf_cnpj', e.target.value)} placeholder="000.000.000-00" /></div>
                   </div>
                   <SaveCancelButtons />
                 </div>
@@ -862,52 +754,27 @@ export default function DealDetailModal({
               <div className={`border rounded-xl p-4 ${hasAddress ? 'bg-sky-50/40 border-sky-100' : 'bg-gray-50 border-gray-100'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <i className={`ri-map-pin-line text-sm ${hasAddress ? 'text-sky-500' : 'text-gray-400'}`}></i>
-                    Endereço
+                    <i className={`ri-map-pin-line text-sm ${hasAddress ? 'text-sky-500' : 'text-gray-400'}`}></i>Endereço
                   </h4>
                   {editSection !== 'endereco' && <EditButton section="endereco" />}
                 </div>
                 {editSection !== 'endereco' ? (
-                  hasAddress ? (
-                    <p className="text-sm text-gray-600">{fullAddress}</p>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">Nenhum endereço cadastrado</p>
-                  )
+                  hasAddress ? <p className="text-sm text-gray-600">{fullAddress}</p>
+                  : <p className="text-sm text-gray-400 italic">Nenhum endereço cadastrado</p>
                 ) : (
                   <div className="space-y-3 animate-[fadeIn_0.15s_ease-out]">
                     <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className={labelClass}>CEP</label>
-                        <input type="text" className={inputClass} value={(editData.endereco_cep as string) || ''} onChange={e => updateField('endereco_cep', e.target.value)} placeholder="00000-000" />
-                      </div>
-                      <div className="col-span-2">
-                        <label className={labelClass}>Rua</label>
-                        <input type="text" className={inputClass} value={(editData.endereco_rua as string) || ''} onChange={e => updateField('endereco_rua', e.target.value)} placeholder="Nome da rua" />
-                      </div>
+                      <div><label className={labelClass}>CEP</label><input type="text" className={inputClass} value={(editData.endereco_cep as string) || ''} onChange={e => updateField('endereco_cep', e.target.value)} placeholder="00000-000" /></div>
+                      <div className="col-span-2"><label className={labelClass}>Rua</label><input type="text" className={inputClass} value={(editData.endereco_rua as string) || ''} onChange={e => updateField('endereco_rua', e.target.value)} placeholder="Nome da rua" /></div>
                     </div>
                     <div className="grid grid-cols-4 gap-3">
-                      <div>
-                        <label className={labelClass}>Número</label>
-                        <input type="text" className={inputClass} value={(editData.endereco_numero as string) || ''} onChange={e => updateField('endereco_numero', e.target.value)} placeholder="Nº" />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Complemento</label>
-                        <input type="text" className={inputClass} value={(editData.endereco_complemento as string) || ''} onChange={e => updateField('endereco_complemento', e.target.value)} placeholder="Apto, Bloco..." />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Bairro</label>
-                        <input type="text" className={inputClass} value={(editData.endereco_bairro as string) || ''} onChange={e => updateField('endereco_bairro', e.target.value)} placeholder="Bairro" />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Cidade</label>
-                        <input type="text" className={inputClass} value={(editData.endereco_cidade as string) || ''} onChange={e => updateField('endereco_cidade', e.target.value)} placeholder="Cidade" />
-                      </div>
+                      <div><label className={labelClass}>Número</label><input type="text" className={inputClass} value={(editData.endereco_numero as string) || ''} onChange={e => updateField('endereco_numero', e.target.value)} placeholder="Nº" /></div>
+                      <div><label className={labelClass}>Complemento</label><input type="text" className={inputClass} value={(editData.endereco_complemento as string) || ''} onChange={e => updateField('endereco_complemento', e.target.value)} placeholder="Apto, Bloco..." /></div>
+                      <div><label className={labelClass}>Bairro</label><input type="text" className={inputClass} value={(editData.endereco_bairro as string) || ''} onChange={e => updateField('endereco_bairro', e.target.value)} placeholder="Bairro" /></div>
+                      <div><label className={labelClass}>Cidade</label><input type="text" className={inputClass} value={(editData.endereco_cidade as string) || ''} onChange={e => updateField('endereco_cidade', e.target.value)} placeholder="Cidade" /></div>
                     </div>
                     <div className="grid grid-cols-4 gap-3">
-                      <div>
-                        <label className={labelClass}>Estado</label>
-                        <input type="text" className={inputClass} value={(editData.endereco_estado as string) || ''} onChange={e => updateField('endereco_estado', e.target.value)} placeholder="UF" />
-                      </div>
+                      <div><label className={labelClass}>Estado</label><input type="text" className={inputClass} value={(editData.endereco_estado as string) || ''} onChange={e => updateField('endereco_estado', e.target.value)} placeholder="UF" /></div>
                     </div>
                     <SaveCancelButtons />
                   </div>
@@ -918,26 +785,17 @@ export default function DealDetailModal({
               <div className={`border rounded-xl p-4 ${hasPix ? 'bg-emerald-50/40 border-emerald-100' : 'bg-gray-50 border-gray-100'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <i className={`ri-bank-card-line text-sm ${hasPix ? 'text-emerald-500' : 'text-gray-400'}`}></i>
-                    Chave PIX
+                    <i className={`ri-bank-card-line text-sm ${hasPix ? 'text-emerald-500' : 'text-gray-400'}`}></i>Chave PIX
                   </h4>
                   {editSection !== 'pix' && <EditButton section="pix" />}
                 </div>
                 {editSection !== 'pix' ? (
                   hasPix ? (
                     <div>
-                      {client.chave_pix_tipo && (
-                        <p className="text-[11px] text-emerald-600 font-medium mb-1">
-                          {pixTipoLabel[client.chave_pix_tipo] || client.chave_pix_tipo}
-                        </p>
-                      )}
-                      <p className="text-sm text-gray-700 font-mono bg-white/60 px-2.5 py-1.5 rounded-lg border border-emerald-100 break-all inline-block">
-                        {client.chave_pix}
-                      </p>
+                      {client.chave_pix_tipo && <p className="text-[11px] text-emerald-600 font-medium mb-1">{pixTipoLabel[client.chave_pix_tipo] || client.chave_pix_tipo}</p>}
+                      <p className="text-sm text-gray-700 font-mono bg-white/60 px-2.5 py-1.5 rounded-lg border border-emerald-100 break-all inline-block">{client.chave_pix}</p>
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">Nenhuma chave PIX cadastrada</p>
-                  )
+                  ) : <p className="text-sm text-gray-400 italic">Nenhuma chave PIX cadastrada</p>
                 ) : (
                   <div className="space-y-3 animate-[fadeIn_0.15s_ease-out]">
                     <div className="grid grid-cols-2 gap-3">
@@ -945,17 +803,12 @@ export default function DealDetailModal({
                         <label className={labelClass}>Tipo da Chave</label>
                         <select className={inputClass} value={(editData.chave_pix_tipo as string) || ''} onChange={e => updateField('chave_pix_tipo', e.target.value)}>
                           <option value="">Selecione...</option>
-                          <option value="cpf">CPF</option>
-                          <option value="cnpj">CNPJ</option>
-                          <option value="email">E-mail</option>
-                          <option value="telefone">Telefone</option>
+                          <option value="cpf">CPF</option><option value="cnpj">CNPJ</option>
+                          <option value="email">E-mail</option><option value="telefone">Telefone</option>
                           <option value="aleatoria">Chave Aleatória</option>
                         </select>
                       </div>
-                      <div>
-                        <label className={labelClass}>Chave PIX</label>
-                        <input type="text" className={inputClass} value={(editData.chave_pix as string) || ''} onChange={e => updateField('chave_pix', e.target.value)} placeholder="Informe a chave PIX" />
-                      </div>
+                      <div><label className={labelClass}>Chave PIX</label><input type="text" className={inputClass} value={(editData.chave_pix as string) || ''} onChange={e => updateField('chave_pix', e.target.value)} placeholder="Informe a chave PIX" /></div>
                     </div>
                     <SaveCancelButtons />
                   </div>
@@ -966,21 +819,13 @@ export default function DealDetailModal({
               <div className={`border rounded-xl p-4 ${client.amostra_enviada ? 'bg-emerald-50/40 border-emerald-100' : hasSample ? 'bg-amber-50/40 border-amber-100' : 'bg-gray-50 border-gray-100'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                    <i className={`ri-gift-line text-sm ${hasSample ? 'text-amber-500' : 'text-gray-400'}`}></i>
-                    Amostra de Produto
+                    <i className={`ri-gift-line text-sm ${hasSample ? 'text-amber-500' : 'text-gray-400'}`}></i>Amostra de Produto
                   </h4>
                   <div className="flex items-center gap-1">
                     {editSection !== 'amostra' && deal?.client_id && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowSampleModal(true);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium text-white bg-[#004aad] hover:bg-[#003d91] rounded-md transition-all cursor-pointer whitespace-nowrap shadow-sm"
-                        title="Solicitar Amostra"
-                      >
-                        <i className="ri-send-plane-line text-xs"></i>
-                        Solicitar Amostra
+                      <button onClick={(e) => { e.stopPropagation(); setShowSampleModal(true); }}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium text-white bg-[#004aad] hover:bg-[#003d91] rounded-md transition-all cursor-pointer whitespace-nowrap shadow-sm">
+                        <i className="ri-send-plane-line text-xs"></i>Solicitar Amostra
                       </button>
                     )}
                     {editSection !== 'amostra' && <EditButton section="amostra" />}
@@ -994,76 +839,55 @@ export default function DealDetailModal({
                           <i className={`text-xs ${client.amostra_enviada ? 'ri-check-line' : 'ri-time-line'}`}></i>
                           {client.amostra_enviada ? 'Enviada' : 'Pendente / Em trânsito'}
                         </span>
-                        {client.amostra_data_envio && (
-                          <span className="text-[11px] text-gray-500">
-                            em {new Date(client.amostra_data_envio).toLocaleDateString('pt-BR')}
-                          </span>
-                        )}
+                        {client.amostra_data_envio && <span className="text-[11px] text-gray-500">em {new Date(client.amostra_data_envio).toLocaleDateString('pt-BR')}</span>}
                       </div>
                       {client.codigo_rastreio && (
                         <div className="mt-2">
                           <p className="text-[11px] text-gray-500 mb-0.5">Código de rastreio:</p>
-                          <p className="text-xs text-gray-700 font-mono bg-white/60 px-2.5 py-1.5 rounded-lg border border-gray-200 break-all inline-block">
-                            {client.codigo_rastreio}
-                          </p>
+                          <p className="text-xs text-gray-700 font-mono bg-white/60 px-2.5 py-1.5 rounded-lg border border-gray-200 break-all inline-block">{client.codigo_rastreio}</p>
                         </div>
                       )}
-                      {client.amostra_observacao && (
-                        <p className="text-xs text-gray-500 mt-2 italic">{client.amostra_observacao}</p>
-                      )}
+                      {client.amostra_observacao && <p className="text-xs text-gray-500 mt-2 italic">{client.amostra_observacao}</p>}
                     </div>
-                  ) : (
-                    <p className="text-sm text-gray-400 italic">Nenhuma amostra registrada</p>
-                  )
+                  ) : <p className="text-sm text-gray-400 italic">Nenhuma amostra registrada</p>
                 ) : (
                   <div className="space-y-3 animate-[fadeIn_0.15s_ease-out]">
                     <div className="flex items-center gap-3">
                       <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={(editData.amostra_enviada as boolean) || false}
+                        <input type="checkbox" checked={(editData.amostra_enviada as boolean) || false}
                           onChange={e => updateField('amostra_enviada', e.target.checked)}
-                          className="w-4 h-4 rounded border-gray-300 text-teal-500 focus:ring-teal-500 cursor-pointer"
-                        />
+                          className="w-4 h-4 rounded border-gray-300 text-teal-500 focus:ring-teal-500 cursor-pointer" />
                         <span className="text-sm text-gray-700 font-medium">Amostra enviada</span>
                       </label>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={labelClass}>Código de Rastreio</label>
-                        <input type="text" className={inputClass} value={(editData.codigo_rastreio as string) || ''} onChange={e => updateField('codigo_rastreio', e.target.value)} placeholder="Código de rastreio" />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Data de Envio</label>
-                        <input type="date" className={inputClass} value={(editData.amostra_data_envio as string) || ''} onChange={e => updateField('amostra_data_envio', e.target.value)} />
-                      </div>
+                      <div><label className={labelClass}>Código de Rastreio</label><input type="text" className={inputClass} value={(editData.codigo_rastreio as string) || ''} onChange={e => updateField('codigo_rastreio', e.target.value)} placeholder="Código de rastreio" /></div>
+                      <div><label className={labelClass}>Data de Envio</label><input type="date" className={inputClass} value={(editData.amostra_data_envio as string) || ''} onChange={e => updateField('amostra_data_envio', e.target.value)} /></div>
                     </div>
-                    <div>
-                      <label className={labelClass}>Observação</label>
-                      <input type="text" className={inputClass} value={(editData.amostra_observacao as string) || ''} onChange={e => updateField('amostra_observacao', e.target.value)} placeholder="Observação sobre a amostra" />
-                    </div>
+                    <div><label className={labelClass}>Observação</label><input type="text" className={inputClass} value={(editData.amostra_observacao as string) || ''} onChange={e => updateField('amostra_observacao', e.target.value)} placeholder="Observação sobre a amostra" /></div>
                     <SaveCancelButtons />
                   </div>
                 )}
               </div>
 
               {/* Pagamento */}
-              <PaymentBlock clientId={client.id} clientName={client.name} />
-
+              <PaymentBlock
+                clientId={client.id}
+                clientName={client.name}
+                onPaymentSaved={() => { if (activeTab === 'historico') loadHistory(); }}
+              />
             </div>
           )}
 
-          {/* Tab: Resultados */}
+          {/* ── Tab: Resultados ── */}
           {activeTab === 'resultados' && client && (
             <div className="space-y-5">
-              {/* Botão editar resultados */}
               <div className="flex justify-end">
                 {editSection !== 'resultados' && <EditButton section="resultados" />}
               </div>
 
               {editSection !== 'resultados' ? (
                 <>
-                  {/* GMV Geral */}
                   <div className="bg-gradient-to-r from-[#5de0e6]/20 to-emerald-50 border border-[#5de0e6]/20 rounded-xl p-4 flex items-center justify-between">
                     <div>
                       <p className="text-xs text-[#004aad] font-medium">GMV Geral</p>
@@ -1073,25 +897,12 @@ export default function DealDetailModal({
                       <i className="ri-money-dollar-circle-line text-xl text-[#004aad]"></i>
                     </div>
                   </div>
-
-                  {/* Comissões */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <p className="text-xs text-gray-400 mb-1">Comissão Orgânica</p>
-                      <p className="text-xl font-bold text-gray-900">{Number(client.comissao_organica || 0)}%</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <p className="text-xs text-gray-400 mb-1">Comissão Tráfego</p>
-                      <p className="text-xl font-bold text-gray-900">{Number(client.comissao_trafego || 0)}%</p>
-                    </div>
+                    <div className="bg-gray-50 rounded-xl p-4"><p className="text-xs text-gray-400 mb-1">Comissão Orgânica</p><p className="text-xl font-bold text-gray-900">{Number(client.comissao_organica || 0)}%</p></div>
+                    <div className="bg-gray-50 rounded-xl p-4"><p className="text-xs text-gray-400 mb-1">Comissão Tráfego</p><p className="text-xl font-bold text-gray-900">{Number(client.comissao_trafego || 0)}%</p></div>
                   </div>
-
-                  {/* GMV Interno */}
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <i className="ri-money-dollar-circle-line text-emerald-500 text-sm"></i>
-                      GMV Interno
-                    </h4>
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><i className="ri-money-dollar-circle-line text-emerald-500 text-sm"></i>GMV Interno</h4>
                     <div className="grid grid-cols-4 gap-3">
                       {gmvData.map((item, i) => (
                         <div key={i} className="bg-emerald-50/60 border border-emerald-100 rounded-xl p-3 text-center">
@@ -1101,23 +912,15 @@ export default function DealDetailModal({
                       ))}
                     </div>
                   </div>
-
-                  {/* Vídeos e Lives */}
                   <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                        <i className="ri-video-line text-teal-500 text-sm"></i>
-                        Vídeos Feitos
-                      </h4>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><i className="ri-video-line text-teal-500 text-sm"></i>Vídeos Feitos</h4>
                       <div className="space-y-2">
                         {videosData.map((item, i) => (
                           <div key={i} className="flex items-center gap-3">
                             <span className="text-xs text-gray-400 w-8">{item.label}</span>
                             <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                              <div
-                                className="h-full bg-gradient-to-r from-teal-400 to-teal-500 rounded-full flex items-center justify-end pr-2 transition-all"
-                                style={{ width: `${Math.max((Number(item.value || 0) / maxVideos) * 100, 8)}%` }}
-                              >
+                              <div className="h-full bg-gradient-to-r from-teal-400 to-teal-500 rounded-full flex items-center justify-end pr-2 transition-all" style={{ width: `${Math.max((Number(item.value || 0) / maxVideos) * 100, 8)}%` }}>
                                 <span className="text-[10px] font-bold text-white">{Number(item.value || 0)}</span>
                               </div>
                             </div>
@@ -1126,19 +929,13 @@ export default function DealDetailModal({
                       </div>
                     </div>
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                        <i className="ri-live-line text-rose-500 text-sm"></i>
-                        Lives Feitas
-                      </h4>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2"><i className="ri-live-line text-rose-500 text-sm"></i>Lives Feitas</h4>
                       <div className="space-y-2">
                         {livesData.map((item, i) => (
                           <div key={i} className="flex items-center gap-3">
                             <span className="text-xs text-gray-400 w-8">{item.label}</span>
                             <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                              <div
-                                className="h-full bg-gradient-to-r from-rose-400 to-rose-500 rounded-full flex items-center justify-end pr-2 transition-all"
-                                style={{ width: `${Math.max((Number(item.value || 0) / maxLives) * 100, 8)}%` }}
-                              >
+                              <div className="h-full bg-gradient-to-r from-rose-400 to-rose-500 rounded-full flex items-center justify-end pr-2 transition-all" style={{ width: `${Math.max((Number(item.value || 0) / maxLives) * 100, 8)}%` }}>
                                 <span className="text-[10px] font-bold text-white">{Number(item.value || 0)}</span>
                               </div>
                             </div>
@@ -1147,31 +944,19 @@ export default function DealDetailModal({
                       </div>
                     </div>
                   </div>
-
-                  {/* Produtos Divulgados */}
                   {client.produtos_divulgados && (
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                        <i className="ri-shopping-bag-line text-teal-500 text-sm"></i>
-                        Produtos Divulgados
-                      </h4>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><i className="ri-shopping-bag-line text-teal-500 text-sm"></i>Produtos Divulgados</h4>
                       <div className="flex flex-wrap gap-1.5">
                         {client.produtos_divulgados.split(',').map((p, i) => (
-                          <span key={i} className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-md border border-teal-100">
-                            {p.trim()}
-                          </span>
+                          <span key={i} className="px-2.5 py-1 bg-teal-50 text-teal-700 text-xs font-medium rounded-md border border-teal-100">{p.trim()}</span>
                         ))}
                       </div>
                     </div>
                   )}
-
-                  {/* TikTok Links */}
                   {client.tiktok_links && client.tiktok_links.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                        <i className="ri-tiktok-line text-gray-800 text-sm"></i>
-                        Contas TikTok ({client.tiktok_links.length})
-                      </h4>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><i className="ri-tiktok-line text-gray-800 text-sm"></i>Contas TikTok ({client.tiktok_links.length})</h4>
                       <div className="flex flex-wrap gap-2">
                         {client.tiktok_links.map((link, i) => (
                           <a key={i} href={link} target="_blank" rel="nofollow noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-100 rounded-lg text-sm text-gray-700 transition-all cursor-pointer">
@@ -1183,112 +968,54 @@ export default function DealDetailModal({
                       </div>
                     </div>
                   )}
-
-                  {/* WhatsApp Group */}
                   {client.whatsapp_group_link && (
                     <div>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                        <i className="ri-whatsapp-line text-emerald-500 text-sm"></i>
-                        Grupo do WhatsApp
-                      </h4>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"><i className="ri-whatsapp-line text-emerald-500 text-sm"></i>Grupo do WhatsApp</h4>
                       <a href={client.whatsapp_group_link} target="_blank" rel="nofollow noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 rounded-lg text-sm text-emerald-700 font-medium transition-all cursor-pointer">
-                        <i className="ri-external-link-line text-sm"></i>
-                        Abrir grupo
+                        <i className="ri-external-link-line text-sm"></i>Abrir grupo
                       </a>
                     </div>
                   )}
                 </>
               ) : (
-                /* Edição de Resultados */
                 <div className="space-y-4 animate-[fadeIn_0.15s_ease-out]">
-                  <div className="flex items-center gap-2 mb-1">
-                    <i className="ri-pencil-line text-xs text-teal-500"></i>
-                    <span className="text-xs font-semibold text-teal-700">Editando Resultados</span>
-                  </div>
-
-                  {/* GMV e Comissões */}
+                  <div className="flex items-center gap-2 mb-1"><i className="ri-pencil-line text-xs text-teal-500"></i><span className="text-xs font-semibold text-teal-700">Editando Resultados</span></div>
                   <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className={labelClass}>GMV Geral (R$)</label>
-                      <input type="number" step="0.01" className={inputClass} value={Number(editData.gmv_geral || 0)} onChange={e => updateField('gmv_geral', parseFloat(e.target.value) || 0)} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Comissão Orgânica (%)</label>
-                      <input type="number" step="0.1" className={inputClass} value={Number(editData.comissao_organica || 0)} onChange={e => updateField('comissao_organica', parseFloat(e.target.value) || 0)} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Comissão Tráfego (%)</label>
-                      <input type="number" step="0.1" className={inputClass} value={Number(editData.comissao_trafego || 0)} onChange={e => updateField('comissao_trafego', parseFloat(e.target.value) || 0)} />
-                    </div>
+                    <div><label className={labelClass}>GMV Geral (R$)</label><input type="number" step="0.01" className={inputClass} value={Number(editData.gmv_geral || 0)} onChange={e => updateField('gmv_geral', parseFloat(e.target.value) || 0)} /></div>
+                    <div><label className={labelClass}>Comissão Orgânica (%)</label><input type="number" step="0.1" className={inputClass} value={Number(editData.comissao_organica || 0)} onChange={e => updateField('comissao_organica', parseFloat(e.target.value) || 0)} /></div>
+                    <div><label className={labelClass}>Comissão Tráfego (%)</label><input type="number" step="0.1" className={inputClass} value={Number(editData.comissao_trafego || 0)} onChange={e => updateField('comissao_trafego', parseFloat(e.target.value) || 0)} /></div>
                   </div>
-
-                  {/* GMV Interno */}
                   <div>
                     <p className="text-xs font-semibold text-gray-600 mb-2">GMV Interno (R$)</p>
                     <div className="grid grid-cols-4 gap-3">
-                      {gmvData.map((item) => (
-                        <div key={item.field}>
-                          <label className={labelClass}>{item.label}</label>
-                          <input type="number" step="0.01" className={inputClass} value={Number((editData as Record<string, unknown>)[item.field] || 0)} onChange={e => updateField(item.field, parseFloat(e.target.value) || 0)} />
-                        </div>
-                      ))}
+                      {gmvData.map((item) => (<div key={item.field}><label className={labelClass}>{item.label}</label><input type="number" step="0.01" className={inputClass} value={Number((editData as Record<string, unknown>)[item.field] || 0)} onChange={e => updateField(item.field, parseFloat(e.target.value) || 0)} /></div>))}
                     </div>
                   </div>
-
-                  {/* Vídeos */}
                   <div>
                     <p className="text-xs font-semibold text-gray-600 mb-2">Vídeos Feitos</p>
                     <div className="grid grid-cols-4 gap-3">
-                      {videosData.map((item) => (
-                        <div key={item.field}>
-                          <label className={labelClass}>{item.label}</label>
-                          <input type="number" className={inputClass} value={Number((editData as Record<string, unknown>)[item.field] || 0)} onChange={e => updateField(item.field, parseInt(e.target.value) || 0)} />
-                        </div>
-                      ))}
+                      {videosData.map((item) => (<div key={item.field}><label className={labelClass}>{item.label}</label><input type="number" className={inputClass} value={Number((editData as Record<string, unknown>)[item.field] || 0)} onChange={e => updateField(item.field, parseInt(e.target.value) || 0)} /></div>))}
                     </div>
                   </div>
-
-                  {/* Lives */}
                   <div>
                     <p className="text-xs font-semibold text-gray-600 mb-2">Lives Feitas</p>
                     <div className="grid grid-cols-4 gap-3">
-                      {livesData.map((item) => (
-                        <div key={item.field}>
-                          <label className={labelClass}>{item.label}</label>
-                          <input type="number" className={inputClass} value={Number((editData as Record<string, unknown>)[item.field] || 0)} onChange={e => updateField(item.field, parseInt(e.target.value) || 0)} />
-                        </div>
-                      ))}
+                      {livesData.map((item) => (<div key={item.field}><label className={labelClass}>{item.label}</label><input type="number" className={inputClass} value={Number((editData as Record<string, unknown>)[item.field] || 0)} onChange={e => updateField(item.field, parseInt(e.target.value) || 0)} /></div>))}
                     </div>
                   </div>
-
-                  {/* Produtos e Links */}
-                  <div>
-                    <label className={labelClass}>Produtos Divulgados (separados por vírgula)</label>
-                    <input type="text" className={inputClass} value={(editData.produtos_divulgados as string) || ''} onChange={e => updateField('produtos_divulgados', e.target.value)} placeholder="Produto 1, Produto 2, ..." />
-                  </div>
-
-                  <div>
-                    <label className={labelClass}>Link do Grupo WhatsApp</label>
-                    <input type="text" className={inputClass} value={(editData.whatsapp_group_link as string) || ''} onChange={e => updateField('whatsapp_group_link', e.target.value)} placeholder="https://chat.whatsapp.com/..." />
-                  </div>
-
+                  <div><label className={labelClass}>Produtos Divulgados (separados por vírgula)</label><input type="text" className={inputClass} value={(editData.produtos_divulgados as string) || ''} onChange={e => updateField('produtos_divulgados', e.target.value)} placeholder="Produto 1, Produto 2, ..." /></div>
+                  <div><label className={labelClass}>Link do Grupo WhatsApp</label><input type="text" className={inputClass} value={(editData.whatsapp_group_link as string) || ''} onChange={e => updateField('whatsapp_group_link', e.target.value)} placeholder="https://chat.whatsapp.com/..." /></div>
                   <div>
                     <label className={labelClass}>Contas TikTok (uma por linha)</label>
-                    <textarea
-                      className={`${inputClass} min-h-[80px]`}
-                      value={((editData.tiktok_links as string[]) || []).join('\n')}
-                      onChange={e => updateField('tiktok_links', e.target.value.split('\n').filter(l => l.trim()))}
-                      placeholder={"https://www.tiktok.com/@usuario1\nhttps://www.tiktok.com/@usuario2"}
-                    />
+                    <textarea className={`${inputClass} min-h-[80px]`} value={((editData.tiktok_links as string[]) || []).join('\n')} onChange={e => updateField('tiktok_links', e.target.value.split('\n').filter(l => l.trim()))} placeholder={"https://www.tiktok.com/@usuario1\nhttps://www.tiktok.com/@usuario2"} />
                   </div>
-
                   <SaveCancelButtons />
                 </div>
               )}
             </div>
           )}
 
-          {/* Tab: Histórico */}
+          {/* ── Tab: Histórico ── */}
           {activeTab === 'historico' && (
             <HistoryTimeline
               history={history}
@@ -1300,16 +1027,11 @@ export default function DealDetailModal({
             />
           )}
 
-          {/* Tab: Tarefas */}
+          {/* ── Tab: Tarefas ── */}
           {activeTab === 'tarefas' && (
-            <DealTasksSection
-              dealId={deal.id}
-              clientId={deal.client_id}
-              dealTitle={deal.title}
-            />
+            <DealTasksSection dealId={deal.id} clientId={deal.client_id} dealTitle={deal.title} />
           )}
 
-          {/* Sem creator vinculado */}
           {!client && !loading && (
             <div className="flex flex-col items-center justify-center py-12 text-gray-400">
               <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center mb-3">
@@ -1322,7 +1044,6 @@ export default function DealDetailModal({
         </div>
       )}
 
-      {/* Modal Solicitar Amostra */}
       {deal && deal.client_id && (
         <RequestSampleModal
           isOpen={showSampleModal}
@@ -1339,14 +1060,10 @@ export default function DealDetailModal({
     </Modal>
   );
 }
-/* ─── HistoryTimeline component ─── */
+
+// ─── HistoryTimeline ─────────────────────────────────────────────────────────
 interface HistoryTimelineProps {
-  history: {
-    id: string; action: string; module: string;
-    entity_name: string | null; user_name: string | null;
-    user_email: string | null; details: Record<string, any> | null;
-    created_at: string; source: 'deal' | 'creator' | 'form';
-  }[];
+  history: ClientHistoryEntry[];
   loading: boolean;
   clientCreatedAt: string | null;
   dealCreatedAt: string;
@@ -1354,132 +1071,38 @@ interface HistoryTimelineProps {
   clientName: string | null;
 }
 
+const EVENT_DISPLAY: Record<string, { icon: string; color: string }> = {
+  cadastro:       { icon: 'ri-user-add-line',          color: 'text-emerald-700 bg-emerald-50 border-emerald-100' },
+  edicao_dados:   { icon: 'ri-edit-2-line',             color: 'text-blue-700 bg-blue-50 border-blue-100' },
+  movimentacao:   { icon: 'ri-arrow-right-circle-line', color: 'text-[#004aad] bg-[#004aad]/10 border-[#004aad]/20' },
+  amostra:        { icon: 'ri-gift-2-line',             color: 'text-purple-700 bg-purple-50 border-purple-100' },
+  logistica:      { icon: 'ri-truck-line',              color: 'text-orange-700 bg-orange-50 border-orange-100' },
+  pix:            { icon: 'ri-bank-card-line',          color: 'text-cyan-700 bg-cyan-50 border-cyan-100' },
+  pagamento:      { icon: 'ri-money-dollar-circle-line',color: 'text-green-700 bg-green-50 border-green-100' },
+  tarefa:         { icon: 'ri-checkbox-circle-line',    color: 'text-yellow-700 bg-yellow-50 border-yellow-100' },
+  interacao:      { icon: 'ri-chat-3-line',             color: 'text-pink-700 bg-pink-50 border-pink-100' },
+  resultado:      { icon: 'ri-bar-chart-2-line',        color: 'text-teal-700 bg-teal-50 border-teal-100' },
+  formulario:     { icon: 'ri-file-list-3-line',        color: 'text-violet-700 bg-violet-50 border-violet-100' },
+  acompanhamento: { icon: 'ri-focus-3-line',            color: 'text-sky-700 bg-sky-50 border-sky-100' },
+  exclusao:       { icon: 'ri-delete-bin-6-line',       color: 'text-rose-700 bg-rose-50 border-rose-100' },
+};
+
 function HistoryTimeline({ history, loading, clientCreatedAt, dealCreatedAt, dealTitle, clientName }: HistoryTimelineProps) {
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  };
-  const formatDateTime = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
-  };
-
-  const getEventConfig = (event: HistoryTimelineProps['history'][0]) => {
-    // Deal events
-    if (event.source === 'deal') {
-      const isMove = event.details?.action === 'move_stage';
-      if (isMove) return {
-        icon: 'ri-arrow-right-circle-line',
-        color: 'text-[#004aad] bg-[#004aad]/10 border-[#004aad]/20',
-        dot: 'bg-[#004aad]',
-        label: `Movido para "${event.details?.to || 'nova etapa'}"`,
-        sub: event.details?.from ? `Antes: ${event.details.from}` : null,
-      };
-      if (event.action === 'create') return {
-        icon: 'ri-kanban-view',
-        color: 'text-emerald-700 bg-emerald-50 border-emerald-100',
-        dot: 'bg-emerald-500',
-        label: 'Acompanhamento criado no funil',
-        sub: dealTitle,
-      };
-      if (event.action === 'update') return {
-        icon: 'ri-edit-line',
-        color: 'text-amber-700 bg-amber-50 border-amber-100',
-        dot: 'bg-amber-500',
-        label: 'Acompanhamento atualizado',
-        sub: null,
-      };
-      if (event.action === 'delete') return {
-        icon: 'ri-delete-bin-line',
-        color: 'text-rose-700 bg-rose-50 border-rose-100',
-        dot: 'bg-rose-500',
-        label: 'Acompanhamento removido',
-        sub: null,
-      };
-    }
-
-    // Creator/client events
-    if (event.source === 'creator') {
-      if (event.action === 'create') return {
-        icon: 'ri-user-add-line',
-        color: 'text-teal-700 bg-teal-50 border-teal-100',
-        dot: 'bg-teal-500',
-        label: 'Creator cadastrado no sistema',
-        sub: event.entity_name,
-      };
-      // Detectar campos alterados
-      const before = event.details?.before || {};
-      const after = event.details?.after || {};
-      const changedFields: string[] = [];
-      const fieldLabels: Record<string, string> = {
-        name: 'Nome', phone: 'Telefone', email: 'E-mail', cpf_cnpj: 'CPF/CNPJ',
-        platform: 'Plataforma', category: 'Categoria', status: 'Status',
-        gmv_geral: 'GMV Geral', comissao_organica: 'Comissão Orgânica', comissao_trafego: 'Comissão Tráfego',
-        chave_pix: 'Chave PIX', chave_pix_tipo: 'Tipo PIX',
-        endereco_cep: 'CEP', amostra_enviada: 'Amostra', codigo_rastreio: 'Rastreio',
-        instagram_profile: 'Instagram', youtube_canal: 'YouTube', tiktok_links: 'TikTok',
-        produtos_divulgados: 'Produtos', whatsapp_group_link: 'Grupo WhatsApp',
-      };
-      for (const key of Object.keys(fieldLabels)) {
-        const bv = JSON.stringify(before[key]), av = JSON.stringify(after[key]);
-        if (bv !== av && av !== undefined) changedFields.push(fieldLabels[key]);
-      }
-      return {
-        icon: 'ri-user-settings-line',
-        color: 'text-purple-700 bg-purple-50 border-purple-100',
-        dot: 'bg-purple-500',
-        label: `Dados atualizados`,
-        sub: changedFields.length > 0 ? changedFields.slice(0, 4).join(', ') + (changedFields.length > 4 ? ` +${changedFields.length - 4}` : '') : null,
-      };
-    }
-
-    // Form submission
-    if (event.source === 'form') {
-      return {
-        icon: 'ri-survey-line',
-        color: 'text-sky-700 bg-sky-50 border-sky-100',
-        dot: 'bg-sky-500',
-        label: 'Formulário preenchido',
-        sub: event.entity_name || null,
-      };
-    }
-
-    return {
-      icon: 'ri-information-line',
-      color: 'text-gray-500 bg-gray-50 border-gray-100',
-      dot: 'bg-gray-400',
-      label: event.action,
-      sub: null,
-    };
-  };
-
-  // Descobrir a origem da criação do creator (formulário ou manual)
-  const creatorCreatedByForm = history.some(e => e.source === 'form' && e.action === 'create');
+  const formatDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const formatDateTime = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <i className="ri-loader-4-line text-2xl text-[#5de0e6] animate-spin"></i>
-      </div>
-    );
+    return <div className="flex items-center justify-center py-12"><i className="ri-loader-4-line text-2xl text-[#5de0e6] animate-spin"></i></div>;
   }
 
   return (
     <div className="space-y-4">
-      {/* Header de resumo */}
+      {/* Cards de resumo */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-gradient-to-r from-[#004aad]/5 to-[#5de0e6]/5 border border-[#5de0e6]/20 rounded-xl p-3.5">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Creator desde</p>
-          <p className="text-sm font-bold text-gray-900">
-            {clientCreatedAt ? formatDate(clientCreatedAt) : '—'}
-          </p>
+          <p className="text-sm font-bold text-gray-900">{clientCreatedAt ? formatDate(clientCreatedAt) : '—'}</p>
           {clientName && <p className="text-[11px] text-gray-500 mt-0.5">{clientName}</p>}
-          <div className="flex items-center gap-1 mt-1.5">
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${creatorCreatedByForm ? 'bg-sky-50 text-sky-600' : 'bg-emerald-50 text-emerald-600'}`}>
-              <i className={`${creatorCreatedByForm ? 'ri-survey-line' : 'ri-user-add-line'} mr-0.5`}></i>
-              {creatorCreatedByForm ? 'Via formulário' : 'Cadastro manual'}
-            </span>
-          </div>
         </div>
         <div className="bg-gray-50 border border-gray-100 rounded-xl p-3.5">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Acompanhamento criado</p>
@@ -1503,56 +1126,37 @@ function HistoryTimeline({ history, loading, clientCreatedAt, dealCreatedAt, dea
         </div>
       ) : (
         <div className="relative">
-          {/* Linha vertical da timeline */}
           <div className="absolute left-[19px] top-2 bottom-2 w-px bg-gray-100"></div>
-
           <div className="space-y-1">
             {history.map((event, idx) => {
-              const cfg = getEventConfig(event);
-              const isFirst = idx === 0;
-              // Verificar se precisa mostrar separador de data
+              const cfg = EVENT_DISPLAY[event.event_type] || { icon: 'ri-information-line', color: 'text-gray-500 bg-gray-50 border-gray-100' };
               const prevDate = idx > 0 ? formatDate(history[idx - 1].created_at) : null;
               const currDate = formatDate(event.created_at);
-              const showDateDivider = prevDate !== currDate;
 
               return (
                 <div key={event.id}>
-                  {showDateDivider && idx > 0 && (
+                  {prevDate !== currDate && idx > 0 && (
                     <div className="flex items-center gap-3 my-3 pl-10">
                       <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{currDate}</span>
                       <div className="flex-1 h-px bg-gray-100"></div>
                     </div>
                   )}
                   <div className="flex items-start gap-3 relative">
-                    {/* Dot na timeline */}
                     <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 z-10 ${cfg.color}`}>
                       <i className={`${cfg.icon} text-sm`}></i>
                     </div>
-
-                    {/* Conteúdo */}
                     <div className={`flex-1 min-w-0 pb-3 ${idx < history.length - 1 ? 'border-b border-gray-50' : ''}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-800 leading-snug">{cfg.label}</p>
-                          {cfg.sub && (
-                            <p className="text-[11px] text-gray-500 mt-0.5 truncate">{cfg.sub}</p>
-                          )}
-                          {/* Quem fez */}
+                          <p className="text-sm font-medium text-gray-800 leading-snug">{event.title}</p>
+                          {event.description && <p className="text-[11px] text-gray-500 mt-0.5">{event.description}</p>}
                           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                            {event.user_name ? (
+                            {event.user_name && (
                               <span className="inline-flex items-center gap-1 text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md">
-                                <i className="ri-user-line text-[9px]"></i>
-                                {event.user_name}
+                                <i className="ri-user-line text-[9px]"></i>{event.user_name}
                               </span>
-                            ) : event.source === 'form' ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded-md">
-                                <i className="ri-survey-line text-[9px]"></i>
-                                Preenchido pelo creator
-                              </span>
-                            ) : null}
-                            <span className="text-[10px] text-gray-400">
-                              {formatDateTime(event.created_at)}
-                            </span>
+                            )}
+                            <span className="text-[10px] text-gray-400">{formatDateTime(event.created_at)}</span>
                           </div>
                         </div>
                       </div>
@@ -1561,8 +1165,7 @@ function HistoryTimeline({ history, loading, clientCreatedAt, dealCreatedAt, dea
                 </div>
               );
             })}
-
-            {/* Marco final: creator entrou no sistema */}
+            {/* Marco final */}
             {clientCreatedAt && (
               <div className="flex items-start gap-3 relative mt-2">
                 <div className="w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 z-10 text-teal-700 bg-teal-50 border-teal-100">
