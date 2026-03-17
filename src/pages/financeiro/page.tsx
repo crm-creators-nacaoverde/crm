@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useActivityLog } from '../../hooks/useActivityLog';
+import { useClientHistory, historyEvent } from '../../hooks/useClientHistory';
 import AppLayout from '../../components/feature/AppLayout';
 import FinanceFormModal from './components/FinanceFormModal';
 import FinanceDetailModal from './components/FinanceDetailModal';
@@ -52,21 +53,26 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 
 export default function FinanceiroPage() {
   const { hasPermission } = useAuth();
-  const { logActivity } = useActivityLog();
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const { logActivity }   = useActivityLog();
+  const { logClientEvent } = useClientHistory();
+
+  const [payments, setPayments]     = useState<Payment[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [search, setSearch]         = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
-  const [selected, setSelected] = useState<Payment | null>(null);
+  const [showForm, setShowForm]     = useState(false);
+  const [editing, setEditing]       = useState<any>(null);
+  const [selected, setSelected]     = useState<Payment | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [pixClient, setPixClient] = useState<{ id: string; name: string; pix: string | null; pixType: string | null } | null>(null);
-  const [stats, setStats] = useState<Stats>({ total: 0, totalAmount: 0, pendente: 0, pago: 0, cancelado: 0, paidAmount: 0, pendingAmount: 0 });
+  const [deleting, setDeleting]     = useState(false);
+  const [pixClient, setPixClient]   = useState<{ id: string; name: string; pix: string | null; pixType: string | null } | null>(null);
+  const [stats, setStats] = useState<Stats>({
+    total: 0, totalAmount: 0, pendente: 0, pago: 0,
+    cancelado: 0, paidAmount: 0, pendingAmount: 0,
+  });
 
-  const canEdit = hasPermission('deals', 'edit');
+  const canEdit   = hasPermission('deals', 'edit');
   const canDelete = hasPermission('deals', 'delete');
 
   useEffect(() => { fetchPayments(); }, []);
@@ -80,28 +86,87 @@ export default function FinanceiroPage() {
     const list = data || [];
     setPayments(list);
     setStats({
-      total: list.length,
-      totalAmount: list.reduce((s, p) => s + Number(p.amount), 0),
-      pendente: list.filter(p => p.status === 'pendente').length,
-      pago: list.filter(p => p.status === 'pago').length,
-      cancelado: list.filter(p => p.status === 'cancelado').length,
-      paidAmount: list.filter(p => p.status === 'pago').reduce((s, p) => s + Number(p.amount), 0),
+      total:         list.length,
+      totalAmount:   list.reduce((s, p) => s + Number(p.amount), 0),
+      pendente:      list.filter(p => p.status === 'pendente').length,
+      pago:          list.filter(p => p.status === 'pago').length,
+      cancelado:     list.filter(p => p.status === 'cancelado').length,
+      paidAmount:    list.filter(p => p.status === 'pago').reduce((s, p) => s + Number(p.amount), 0),
       pendingAmount: list.filter(p => p.status === 'pendente').reduce((s, p) => s + Number(p.amount), 0),
     });
     setLoading(false);
+  };
+
+  // ── Chamado pelo FinanceFormModal após salvar ──────────────────────────────
+  // O modal passa o payload salvo via onSaved para podermos registrar o histórico
+  const handleFormSaved = async (savedPayment?: {
+    isNew: boolean;
+    client_id: string;
+    type: string;
+    amount: number;
+    status: string;
+    previousStatus?: string;
+  }) => {
+    await fetchPayments();
+
+    if (!savedPayment) return;
+
+    if (savedPayment.isNew) {
+      // ── CRIAÇÃO ────────────────────────────────────────────────────────────
+      await logClientEvent({
+        client_id: savedPayment.client_id,
+        ...historyEvent.pagamentoRegistrado(savedPayment.type, savedPayment.amount),
+      });
+    } else {
+      // ── EDIÇÃO — verificar se status ou valor mudou ───────────────────────
+      const statusMudou = savedPayment.previousStatus && savedPayment.previousStatus !== savedPayment.status;
+      if (statusMudou) {
+        await logClientEvent({
+          client_id: savedPayment.client_id,
+          ...historyEvent.pagamentoAtualizado(savedPayment.status, savedPayment.amount),
+        });
+      } else {
+        // Valor ou outros campos editados
+        await logClientEvent({
+          client_id: savedPayment.client_id,
+          event_type: 'pagamento',
+          title: 'Pagamento editado',
+          description: `Tipo: ${savedPayment.type} | Valor: R$ ${Number(savedPayment.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+        });
+      }
+    }
   };
 
   const handleDelete = async () => {
     if (!deletingId) return;
     setDeleting(true);
     const item = payments.find(p => p.id === deletingId);
+
     // Remover comprovante do storage se existir
     if (item?.receipt_url) {
       const path = item.receipt_url.split('/receipts/')[1];
       if (path) await supabase.storage.from('receipts').remove([path]);
     }
+
     await supabase.from('creator_payments').delete().eq('id', deletingId);
-    if (item) await logActivity({ action: 'delete', module: 'financeiro', entityId: deletingId, entityName: item.client_name, details: { amount: item.amount, type: item.type } });
+
+    if (item) {
+      await logActivity({
+        action: 'delete', module: 'financeiro',
+        entityId: deletingId, entityName: item.client_name,
+        details: { amount: item.amount, type: item.type },
+      });
+
+      // ── Registrar exclusão no histórico do creator ───────────────────────
+      await logClientEvent({
+        client_id: item.client_id,
+        ...historyEvent.exclusaoDado(
+          'Pagamento',
+          `Tipo: ${TYPE_CONFIG[item.type]?.label || item.type} | Valor: R$ ${Number(item.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+        ),
+      });
+    }
+
     setDeletingId(null);
     setDeleting(false);
     await fetchPayments();
@@ -112,11 +177,11 @@ export default function FinanceiroPage() {
       p.client_name.toLowerCase().includes(search.toLowerCase()) ||
       p.pix_key?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || p.status === statusFilter;
-    const matchType = typeFilter === 'all' || p.type === typeFilter;
+    const matchType   = typeFilter === 'all' || p.type === typeFilter;
     return matchSearch && matchStatus && matchType;
   });
 
-  const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  const fmt      = (d: string | null) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
   const fmtMoney = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
   return (
@@ -126,10 +191,10 @@ export default function FinanceiroPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { label: 'Total de pagamentos', value: stats.total.toString(), icon: 'ri-money-dollar-circle-line', bg: 'bg-[#004aad]/10', ic: 'text-[#004aad]' },
-            { label: 'Valor total', value: fmtMoney(stats.totalAmount), icon: 'ri-hand-coin-line', bg: 'bg-[#5de0e6]/10', ic: 'text-[#004aad]' },
-            { label: 'Pagos', value: fmtMoney(stats.paidAmount), icon: 'ri-checkbox-circle-line', bg: 'bg-emerald-50', ic: 'text-emerald-600' },
-            { label: 'Pendente', value: fmtMoney(stats.pendingAmount), icon: 'ri-time-line', bg: 'bg-amber-50', ic: 'text-amber-600' },
+            { label: 'Total de pagamentos', value: stats.total.toString(),        icon: 'ri-money-dollar-circle-line', bg: 'bg-[#004aad]/10', ic: 'text-[#004aad]' },
+            { label: 'Valor total',          value: fmtMoney(stats.totalAmount),  icon: 'ri-hand-coin-line',           bg: 'bg-[#5de0e6]/10', ic: 'text-[#004aad]' },
+            { label: 'Pagos',                value: fmtMoney(stats.paidAmount),   icon: 'ri-checkbox-circle-line',     bg: 'bg-emerald-50',   ic: 'text-emerald-600' },
+            { label: 'Pendente',             value: fmtMoney(stats.pendingAmount),icon: 'ri-time-line',                bg: 'bg-amber-50',     ic: 'text-amber-600' },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3">
               <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
@@ -304,7 +369,7 @@ export default function FinanceiroPage() {
       <FinanceFormModal
         isOpen={showForm}
         onClose={() => { setShowForm(false); setEditing(null); }}
-        onSaved={fetchPayments}
+        onSaved={handleFormSaved}
         editing={editing}
       />
 
@@ -326,7 +391,9 @@ export default function FinanceiroPage() {
           currentPixKey={pixClient.pix}
           currentPixType={pixClient.pixType}
           onSaved={(key, type) => {
-            setPayments(prev => prev.map(p => p.client_id === pixClient!.id ? { ...p, pix_key: key, pix_key_type: type } : p));
+            setPayments(prev => prev.map(p =>
+              p.client_id === pixClient!.id ? { ...p, pix_key: key, pix_key_type: type } : p
+            ));
           }}
         />
       )}
