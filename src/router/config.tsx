@@ -6,6 +6,7 @@ import AcompanhamentoPage from "../pages/acompanhamento/page";
 import CreatorsPage from "../pages/creators/page";
 import InteracoesPage from "../pages/interacoes/page";
 import MetricasPage from "../pages/metricas/page";
+import ConfiguracoesPage from "../pages/configuracoes/page";
 import ConfiguracoesEmpresaPage from "../pages/configuracoes/empresa/page";
 import ConfiguracoesUsuarioPage from "../pages/configuracoes/usuario/page";
 import FormulariosPage from "../pages/formularios/page";
@@ -35,10 +36,12 @@ const routes: RouteObject[] = [
     path: "/interacoes",
     element: <InteracoesPage />,
   },
+  // Hub de configurações — exibe os dois cards
   {
     path: "/configuracoes",
-    element: <ConfiguracoesUsuarioPage />,
+    element: <ConfiguracoesPage />,
   },
+  // Sub-páginas individuais
   {
     path: "/configuracoes/usuario",
     element: <ConfiguracoesUsuarioPage />,
