@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useActivityLog } from './useActivityLog';
 
 export type AutomationActionType = 'notify_push' | 'notify_email' | 'create_task' | 'send_webhook';
 
@@ -34,6 +35,7 @@ export interface StageAutomation {
 
 export function useStageAutomations(funnelId?: string) {
   const { profile } = useAuth();
+  const { logActivity } = useActivityLog();
   const [saving, setSaving] = useState(false);
 
   // Buscar automações de uma etapa específica
@@ -92,6 +94,7 @@ export function useStageAutomations(funnelId?: string) {
         .select()
         .single();
       if (error) throw error;
+      await logActivity({ action: 'create', module: 'funnels', entityId: data?.id, entityName: name, details: { stageId, actionType } });
       return { success: true, data };
     } catch (err) {
       console.error('[useStageAutomations] create:', err);
@@ -99,7 +102,7 @@ export function useStageAutomations(funnelId?: string) {
     } finally {
       setSaving(false);
     }
-  }, [profile]);
+  }, [profile, logActivity]);
 
   // Atualizar automação
   const updateAutomation = useCallback(async (
@@ -113,13 +116,14 @@ export function useStageAutomations(funnelId?: string) {
         .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
+      await logActivity({ action: 'update', module: 'funnels', entityId: id, details: { updates } });
       return { success: true };
     } catch (err) {
       return { success: false, error: err };
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [logActivity]);
 
   // Deletar automação
   const deleteAutomation = useCallback(async (id: string) => {
@@ -129,11 +133,12 @@ export function useStageAutomations(funnelId?: string) {
         .delete()
         .eq('id', id);
       if (error) throw error;
+      await logActivity({ action: 'delete', module: 'funnels', entityId: id, entityName: 'Automação' });
       return { success: true };
     } catch (err) {
       return { success: false, error: err };
     }
-  }, []);
+  }, [logActivity]);
 
   // ── EXECUTAR automações de uma etapa (chamado ao mover deal) ──────────
   const executeAutomations = useCallback(async (

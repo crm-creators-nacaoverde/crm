@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSampleAlerts } from '../../hooks/useSampleAlerts';
-import { useCompanySettings } from '../../contexts/CompanySettingsContext';
 import NotificationPanel from './NotificationPanel';
 import SystemTour from './SystemTour';
 
@@ -21,7 +20,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { alerts, unreadCount, markAsRead, markAllAsRead } = useSampleAlerts();
-  const { settings: company } = useCompanySettings();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -52,6 +50,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { id: 'kanban', label: 'Acompanhamento', icon: 'ri-kanban-view', path: '/acompanhamento', permission: 'deals' },
     { id: 'interactions', label: 'Interações', icon: 'ri-chat-3-line', path: '/interacoes', permission: 'interactions' },
     { id: 'logistica', label: 'Logística', icon: 'ri-truck-line', path: '/logistica', permission: 'deals' },
+    { id: 'financeiro', label: 'Financeiro', icon: 'ri-money-dollar-circle-line', path: '/financeiro', permission: 'deals' },
     { id: 'formularios', label: 'Formulários', icon: 'ri-survey-line', path: '/formularios', permission: 'forms' },
     { id: 'logs', label: 'Logs', icon: 'ri-history-line', path: '/logs', permission: 'users' },
     { id: 'settings', label: 'Configurações', icon: 'ri-settings-3-line', path: '/configuracoes', permission: 'settings' },
@@ -81,8 +80,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   };
 
   const getPageTitle = () => {
-    if (location.pathname === '/configuracoes/empresa') return 'Configurações da Empresa';
-    if (location.pathname === '/configuracoes/usuario' || location.pathname === '/configuracoes') return 'Minha Conta';
     const current = menuItems.find(item => location.pathname === item.path);
     return current?.label || 'Acompanhamento';
   };
@@ -94,10 +91,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
       '/acompanhamento': 'Pipeline de vendas e oportunidades',
       '/interacoes': 'Histórico de comunicações',
       '/logistica': 'Controle de envios e rastreamento',
+      '/financeiro': 'Pagamentos e histórico financeiro',
       '/formularios': 'Crie e gerencie formulários para creators',
-      '/configuracoes': 'Minha conta e preferências',
-      '/configuracoes/usuario': 'Minha conta e preferências',
-      '/configuracoes/empresa': 'Configurações globais da empresa',
+      '/configuracoes': 'Preferências do sistema',
       '/users': 'Gerencie acessos e permissões da equipe',
       '/logs': 'Histórico de atividades do sistema',
     };
@@ -193,14 +189,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 min-w-[36px] rounded-xl flex items-center justify-center">
               <img 
-                src={company.logo_base64 || company.logo_url || "https://static.readdy.ai/image/70e45d590e9f98e53f87ef3694a62a6d/0c4980ef84e25e6962183ed0f1e9a202.png"} 
-                alt={company.name || "Creator Milionário"} 
+                src="https://static.readdy.ai/image/70e45d590e9f98e53f87ef3694a62a6d/0c4980ef84e25e6962183ed0f1e9a202.png" 
+                alt="Creator Milionário" 
                 className="w-full h-full object-contain"
               />
             </div>
             {!sidebarCollapsed && (
               <div className="min-w-0">
-                <h1 className="text-[15px] font-bold text-gray-900 truncate leading-tight">{company.name || 'CRM Creators'}</h1>
+                <h1 className="text-[15px] font-bold text-gray-900 truncate leading-tight">CRM Creators</h1>
                 <p className="text-[10px] text-gray-400 leading-tight mt-0.5">Gestão de Influenciadores</p>
               </div>
             )}
@@ -249,79 +245,34 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* Bottom section */}
         <div className={`border-t border-gray-50 ${sidebarCollapsed ? 'px-2' : 'px-3'} py-3`}>
-          {/* Menu de Configurações com 2 sub-itens */}
-          {hasPermission('settings', 'view') && (
-            <div>
-              {sidebarCollapsed ? (
-                /* Modo colapsado: ícone único navega para /configuracoes */
-                <button
-                  onClick={() => navigate('/configuracoes')}
-                  title="Configurações"
-                  className={`w-full flex items-center justify-center px-0 py-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
-                    location.pathname.startsWith('/configuracoes')
-                      ? 'bg-[#5de0e6]/10 text-[#004aad]'
-                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                  }`}
-                >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    location.pathname.startsWith('/configuracoes') ? 'bg-[#5de0e6]/20 text-[#004aad]' : 'text-gray-400'
-                  }`}>
-                    <i className="ri-settings-3-line text-lg"></i>
-                  </div>
-                </button>
-              ) : (
-                /* Modo expandido: grupo com 2 sub-itens */
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-1.5">Configurações</p>
+          {bottomMenuItems.map((item) => {
+            if (!hasPermission(item.permission, 'view')) return null;
+            const active = isActive(item);
 
-                  {/* Sub-item: Minha Conta */}
-                  <button
-                    onClick={() => navigate('/configuracoes/usuario')}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap group ${
-                      location.pathname === '/configuracoes' || location.pathname === '/configuracoes/usuario'
-                        ? 'bg-[#5de0e6]/10 text-[#004aad]'
-                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                    }`}
-                  >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                      location.pathname === '/configuracoes' || location.pathname === '/configuracoes/usuario'
-                        ? 'bg-[#5de0e6]/20 text-[#004aad]'
-                        : 'bg-transparent group-hover:bg-gray-100 text-gray-400 group-hover:text-gray-600'
-                    }`}>
-                      <i className="ri-user-settings-line text-[17px]"></i>
-                    </div>
-                    <span className={`text-[13px] ${location.pathname.includes('/usuario') || location.pathname === '/configuracoes' ? 'font-semibold' : 'font-medium'}`}>
-                      Minha Conta
-                    </span>
-                  </button>
-
-                  {/* Sub-item: Empresa — somente admin */}
-                  {profile?.role === 'admin' && (
-                    <button
-                      onClick={() => navigate('/configuracoes/empresa')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap group ${
-                        location.pathname === '/configuracoes/empresa'
-                          ? 'bg-[#5de0e6]/10 text-[#004aad]'
-                          : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                      }`}
-                    >
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                        location.pathname === '/configuracoes/empresa'
-                          ? 'bg-[#5de0e6]/20 text-[#004aad]'
-                          : 'bg-transparent group-hover:bg-gray-100 text-gray-400 group-hover:text-gray-600'
-                      }`}>
-                        <i className="ri-building-4-line text-[17px]"></i>
-                      </div>
-                      <span className={`text-[13px] ${location.pathname === '/configuracoes/empresa' ? 'font-semibold' : 'font-medium'}`}>
-                        Empresa
-                      </span>
-                      <span className="ml-auto text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">ADMIN</span>
-                    </button>
-                  )}
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleNavClick(item)}
+                title={sidebarCollapsed ? item.label : undefined}
+                className={`w-full flex items-center gap-3 rounded-xl transition-all duration-200 cursor-pointer whitespace-nowrap group ${
+                  sidebarCollapsed ? 'px-0 py-2.5 justify-center' : 'px-3 py-2.5'
+                } ${
+                  active
+                    ? 'bg-[#5de0e6]/10 text-[#004aad]'
+                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                }`}
+              >
+                <div className={`flex items-center justify-center ${sidebarCollapsed ? 'w-10 h-10 rounded-xl' : 'w-8 h-8 rounded-lg'} ${
+                  active ? 'bg-[#5de0e6]/20 text-[#004aad]' : 'bg-transparent group-hover:bg-gray-100 text-gray-400 group-hover:text-gray-600'
+                } transition-all`}>
+                  <i className={`${item.icon} ${sidebarCollapsed ? 'text-lg' : 'text-[17px]'}`}></i>
                 </div>
-              )}
-            </div>
-          )}
+                {!sidebarCollapsed && (
+                  <span className={`text-[13px] ${active ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
+                )}
+              </button>
+            );
+          })}
 
           {/* Collapse button */}
           <button
@@ -415,7 +366,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </div>
                 <div className="py-1">
                   <button
-                    onClick={() => { navigate('/configuracoes/usuario'); setProfileMenuOpen(false); }}
+                    onClick={() => { navigate('/configuracoes'); setProfileMenuOpen(false); }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-600 hover:bg-gray-50 cursor-pointer"
                   >
                     <i className="ri-settings-4-line text-base text-gray-400"></i>

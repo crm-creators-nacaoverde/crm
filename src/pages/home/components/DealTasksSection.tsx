@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useActivityLog } from '../../../hooks/useActivityLog';
 
 export interface DealTask {
   id: string;
@@ -73,6 +74,7 @@ export default function DealTasksSection({ dealId, clientId, dealTitle }: DealTa
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [filterTab, setFilterTab] = useState<'pending' | 'all'>('pending');
   const { user, profile } = useAuth();
+  const { logActivity } = useActivityLog();
 
   const [form, setForm] = useState({
     title: '', description: '', type: 'task',
@@ -121,6 +123,7 @@ export default function DealTasksSection({ dealId, clientId, dealTitle }: DealTa
         created_by: user?.id,
       }]);
       if (error) throw error;
+      await logActivity({ action: 'create', module: 'tasks', entityName: form.title.trim(), details: { dealId, dealTitle, type: form.type, priority: form.priority } });
       resetForm();
       setShowAddForm(false);
       setShowSuggestions(false);
@@ -139,12 +142,15 @@ export default function DealTasksSection({ dealId, clientId, dealTitle }: DealTa
         completed_by_name: nowCompleting ? (profile?.full_name || null) : null,
         updated_at: new Date().toISOString(),
       }).eq('id', task.id);
+      await logActivity({ action: 'update', module: 'tasks', entityId: task.id, entityName: task.title, details: { is_completed: nowCompleting } });
       await loadTasks();
     } catch (err) { console.error(err); }
   };
 
   const handleDelete = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
     await supabase.from('deal_tasks').delete().eq('id', id);
+    if (task) await logActivity({ action: 'delete', module: 'tasks', entityId: id, entityName: task.title });
     await loadTasks();
   };
 

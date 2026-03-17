@@ -12,6 +12,7 @@ import FormulariosPage from "../pages/formularios/page";
 import PublicFormPage from "../pages/formularios/components/PublicFormPage";
 import LogsPage from "../pages/logs/page";
 import LogisticaPage from "../pages/logistica/page";
+import FinanceiroPage from "../pages/financeiro/page";
 
 const routes: RouteObject[] = [
   {
@@ -34,7 +35,6 @@ const routes: RouteObject[] = [
     path: "/interacoes",
     element: <InteracoesPage />,
   },
-  // Configurações — 2 níveis
   {
     path: "/configuracoes",
     element: <ConfiguracoesUsuarioPage />,
@@ -51,7 +51,6 @@ const routes: RouteObject[] = [
     path: "/formularios",
     element: <FormulariosPage />,
   },
-  // Rotas de formulário público
   {
     path: "/formulario/:token",
     element: <PublicFormPage />,
@@ -61,7 +60,7 @@ const routes: RouteObject[] = [
     element: <PublicFormPage />,
   },
   {
-    path: "/f/:slug",
+    path: "/f/:token",
     element: <PublicFormPage />,
   },
   {
@@ -75,6 +74,10 @@ const routes: RouteObject[] = [
   {
     path: "/logistica",
     element: <LogisticaPage />,
+  },
+  {
+    path: "/financeiro",
+    element: <FinanceiroPage />,
   },
   {
     path: "*",

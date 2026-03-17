@@ -126,8 +126,8 @@ export function useFunnelStages(funnelId?: string) {
     }
   }, [funnelId]);
 
-  // Simple format for components that just need {id, label, color}
-  const stagesSimple = stages.map(({ id, label, color }) => ({ id, label, color }));
+  // Formato completo incluindo description para tooltips
+  const stagesSimple = stages.map(({ id, label, color, description }) => ({ id, label, color, description }));
 
   return { stages: stagesSimple, loading, saveStages, reloadStages: loadStages };
 }

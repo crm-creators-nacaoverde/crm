@@ -12,6 +12,7 @@ import FunnelManagerModal from './FunnelManagerModal';
 import { useFunnelStages } from '../../../hooks/useFunnelStages';
 import { useFunnels } from '../../../hooks/useFunnels';
 import { useStageAutomations } from '../../../hooks/useStageAutomations';
+import StageAutomationsModal from './StageAutomationsModal';
 
 export interface Deal {
   id: string;
@@ -77,6 +78,7 @@ export default function KanbanSection() {
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [isFunnelModalOpen, setIsFunnelModalOpen] = useState(false);
   const [isFunnelManagerOpen, setIsFunnelManagerOpen] = useState(false);
+  const [automationsStage, setAutomationsStage] = useState<{ id: string; label: string; color: string } | null>(null);
   const [exportToast, setExportToast] = useState(false);
   const [hideClosedStages, setHideClosedStages] = useState(loadHideClosed);
   const { user } = useAuth();
@@ -454,6 +456,7 @@ export default function KanbanSection() {
               onEditDeal={handleViewDeal}
               onDeleteDeal={handleDeleteDeal}
               canDelete={canDeleteDeals}
+              onOpenAutomations={(stage) => setAutomationsStage(stage)}
             />
           ))}
         </div>
@@ -501,6 +504,18 @@ export default function KanbanSection() {
         isOpen={isFunnelManagerOpen}
         onClose={() => setIsFunnelManagerOpen(false)}
       />
+
+      {/* StageAutomationsModal */}
+      {automationsStage && (
+        <StageAutomationsModal
+          isOpen={!!automationsStage}
+          onClose={() => setAutomationsStage(null)}
+          stageId={automationsStage.id}
+          stageLabel={automationsStage.label}
+          stageColor={automationsStage.color}
+          funnelId={selectedFunnelId || ''}
+        />
+      )}
 
       {/* Export toast */}
       {exportToast && (

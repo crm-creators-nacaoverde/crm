@@ -72,6 +72,247 @@ interface HistoryEvent {
   source: 'deal' | 'creator' | 'form';
 }
 
+// ─── Bloco de Pagamento — sincronizado com o módulo Financeiro ──────────────
+function PaymentBlock({ clientId, clientName }: { clientId: string; clientName: string }) {
+  const [lastPayment, setLastPayment] = useState<{
+    id: string; type: string; amount: number; status: string;
+    pix_key: string | null; paid_at: string | null; created_at: string;
+  } | null>(null);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [showNewPayment, setShowNewPayment] = useState(false);
+
+  const TYPES: Record<string, { label: string; icon: string; color: string }> = {
+    premiacao: { label: 'Premiação',  icon: 'ri-trophy-line',              color: 'text-amber-700 bg-amber-100' },
+    cache:     { label: 'Cachê',      icon: 'ri-money-dollar-circle-line', color: 'text-blue-700 bg-blue-100' },
+    bonus:     { label: 'Bônus',      icon: 'ri-gift-line',                color: 'text-purple-700 bg-purple-100' },
+    reembolso: { label: 'Reembolso',  icon: 'ri-refund-line',              color: 'text-teal-700 bg-teal-100' },
+    outro:     { label: 'Outro',      icon: 'ri-more-line',                color: 'text-gray-600 bg-gray-100' },
+  };
+
+  const STATUS: Record<string, { label: string; color: string; icon: string }> = {
+    pendente:  { label: 'Pendente',  color: 'text-amber-700 bg-amber-100',   icon: 'ri-time-line' },
+    pago:      { label: 'Pago',      color: 'text-emerald-700 bg-emerald-100', icon: 'ri-checkbox-circle-line' },
+    cancelado: { label: 'Cancelado', color: 'text-rose-700 bg-rose-100',     icon: 'ri-close-circle-line' },
+  };
+
+  const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString('pt-BR') : null;
+  const fmtMoney = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+  useEffect(() => {
+    if (!clientId) return;
+    const load = async () => {
+      setLoading(true);
+      const [lastRes, totalRes] = await Promise.all([
+        supabase.from('creator_payments').select('id,type,amount,status,pix_key,paid_at,created_at')
+          .eq('client_id', clientId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('creator_payments').select('amount').eq('client_id', clientId).neq('status', 'cancelado'),
+      ]);
+      setLastPayment(lastRes.data || null);
+      const sum = (totalRes.data || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+      setTotal(sum);
+      setLoading(false);
+    };
+    load();
+  }, [clientId]);
+
+  const hasPayment = !!lastPayment;
+  const t = lastPayment ? (TYPES[lastPayment.type] || TYPES.outro) : null;
+  const s = lastPayment ? (STATUS[lastPayment.status] || STATUS.pendente) : null;
+
+  return (
+    <div className={`border rounded-xl p-4 ${hasPayment ? 'bg-[#004aad]/5 border-[#004aad]/15' : 'bg-gray-50 border-gray-100'}`}>
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+          <i className={`ri-money-dollar-circle-line text-sm ${hasPayment ? 'text-[#004aad]' : 'text-gray-400'}`}></i>
+          Pagamentos
+        </h4>
+        <div className="flex items-center gap-1">
+          {hasPayment && (
+            <a href="/financeiro" target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-[#004aad] hover:underline mr-1">
+              <i className="ri-external-link-line text-xs"></i>Ver todos
+            </a>
+          )}
+          <button
+            onClick={() => setShowNewPayment(true)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium text-white bg-[#004aad] hover:bg-[#003d91] rounded-md transition-all cursor-pointer whitespace-nowrap shadow-sm">
+            <i className="ri-add-line text-xs"></i>Novo Pagamento
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 py-2">
+          <i className="ri-loader-4-line animate-spin text-gray-400 text-sm"></i>
+          <span className="text-xs text-gray-400">Carregando...</span>
+        </div>
+      ) : hasPayment ? (
+        <div className="space-y-2">
+          {/* Total acumulado */}
+          {total > 0 && (
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] text-gray-500">Total pago:</span>
+              <span className="text-sm font-bold text-[#004aad]">{fmtMoney(total)}</span>
+            </div>
+          )}
+          {/* Último pagamento */}
+          <div className="bg-white/70 rounded-lg px-3 py-2 border border-gray-100">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] text-gray-400 uppercase tracking-wide">Último pagamento</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {t && (
+                <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md ${t.color}`}>
+                  <i className={`${t.icon} text-[10px]`}></i>{t.label}
+                </span>
+              )}
+              {s && (
+                <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md ${s.color}`}>
+                  <i className={`${s.icon} text-[10px]`}></i>{s.label}
+                </span>
+              )}
+              <span className="text-xs font-bold text-gray-800">{fmtMoney(lastPayment!.amount)}</span>
+              {lastPayment!.paid_at && (
+                <span className="text-[11px] text-gray-400">em {fmt(lastPayment!.paid_at)}</span>
+              )}
+            </div>
+            {lastPayment!.pix_key && (
+              <p className="text-[11px] text-gray-500 mt-1 font-mono truncate">PIX: {lastPayment!.pix_key}</p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400 italic">Nenhum pagamento registrado</p>
+      )}
+
+      {/* Mini-modal de novo pagamento */}
+      {showNewPayment && (
+        <QuickPaymentForm
+          clientId={clientId}
+          clientName={clientName}
+          onClose={() => setShowNewPayment(false)}
+          onSaved={() => {
+            setShowNewPayment(false);
+            // Recarregar bloco
+            setLoading(true);
+            const load = async () => {
+              const [lastRes, totalRes] = await Promise.all([
+                supabase.from('creator_payments').select('id,type,amount,status,pix_key,paid_at,created_at')
+                  .eq('client_id', clientId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+                supabase.from('creator_payments').select('amount').eq('client_id', clientId).neq('status', 'cancelado'),
+              ]);
+              setLastPayment(lastRes.data || null);
+              const sum = (totalRes.data || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+              setTotal(sum);
+              setLoading(false);
+            };
+            load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Formulário rápido de pagamento inline ──────────────────────────────────
+function QuickPaymentForm({
+  clientId, clientName, onClose, onSaved,
+}: { clientId: string; clientName: string; onClose: () => void; onSaved: () => void }) {
+  const [type, setType] = useState('premiacao');
+  const [amount, setAmount] = useState('');
+  const [pixKey, setPixKey] = useState('');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const TYPES = [
+    { value: 'premiacao', label: 'Premiação', icon: 'ri-trophy-line' },
+    { value: 'cache',     label: 'Cachê',     icon: 'ri-money-dollar-circle-line' },
+    { value: 'bonus',     label: 'Bônus',     icon: 'ri-gift-line' },
+    { value: 'reembolso', label: 'Reembolso', icon: 'ri-refund-line' },
+    { value: 'outro',     label: 'Outro',     icon: 'ri-more-line' },
+  ];
+
+  useEffect(() => {
+    // Puxar PIX do creator
+    supabase.from('clients').select('chave_pix').eq('id', clientId).maybeSingle()
+      .then(({ data }) => { if (data?.chave_pix) setPixKey(data.chave_pix); });
+  }, [clientId]);
+
+  const handleSave = async () => {
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) return;
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('creator_payments').insert({
+      client_id: clientId, client_name: clientName,
+      type, amount: parseFloat(amount), status: 'pendente',
+      pix_key: pixKey || null, notes: notes || null,
+      created_by: user?.id || null,
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    });
+    if (user) {
+      await supabase.from('activity_logs').insert({
+        user_id: user.id,
+        user_name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
+        user_email: user.email || '',
+        action: 'create', module: 'financeiro',
+        entity_name: clientName,
+        details: { type, amount: parseFloat(amount), source: 'deal_detail' },
+      });
+    }
+    setSaving(false);
+    onSaved();
+  };
+
+  const inp = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] bg-white';
+
+  return (
+    <div className="mt-3 p-3.5 bg-white border border-[#004aad]/20 rounded-xl space-y-3 animate-[fadeIn_0.15s_ease-out]">
+      <p className="text-xs font-semibold text-gray-600">Registrar pagamento rápido</p>
+
+      {/* Tipo */}
+      <div className="grid grid-cols-5 gap-1">
+        {TYPES.map(t => (
+          <button key={t.value} type="button" onClick={() => setType(t.value)}
+            className={`py-2 px-1 text-[10px] font-medium rounded-lg border cursor-pointer transition-all text-center flex flex-col items-center gap-0.5
+              ${type === t.value ? 'border-[#004aad]/40 bg-[#004aad]/5 text-[#004aad]' : 'border-gray-100 text-gray-500 hover:border-gray-200 bg-white'}`}>
+            <i className={`${t.icon} text-sm`}></i>{t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Valor e PIX */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[11px] text-gray-500 mb-1">Valor (R$) *</label>
+          <input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)}
+            placeholder="0,00" className={inp} />
+        </div>
+        <div>
+          <label className="block text-[11px] text-gray-500 mb-1">Chave PIX</label>
+          <input type="text" value={pixKey} onChange={e => setPixKey(e.target.value)}
+            placeholder="Chave PIX" className={`${inp} font-mono text-xs`} />
+        </div>
+      </div>
+
+      {/* Observação */}
+      <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
+        placeholder="Observação (opcional)" className={inp} />
+
+      <div className="flex gap-2">
+        <button type="button" onClick={onClose}
+          className="flex-1 py-2 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer transition-colors">
+          Cancelar
+        </button>
+        <button type="button" onClick={handleSave} disabled={saving || !amount}
+          className="flex-1 py-2 text-xs font-semibold text-white bg-[#004aad] hover:bg-[#003d91] rounded-xl cursor-pointer transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5">
+          {saving ? <><i className="ri-loader-4-line animate-spin"></i>Salvando...</> : <><i className="ri-add-line"></i>Registrar</>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function DealDetailModal({
   isOpen,
   onClose,
@@ -805,6 +1046,10 @@ export default function DealDetailModal({
                   </div>
                 )}
               </div>
+
+              {/* Pagamento */}
+              <PaymentBlock clientId={client.id} clientName={client.name} />
+
             </div>
           )}
 

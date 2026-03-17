@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '../../components/feature/AppLayout';
 import { supabase, Client, Interaction } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useActivityLog } from '../../hooks/useActivityLog';
 import MetricCards from './components/MetricCards';
 import ActivityBars from './components/ActivityBars';
 import DistributionCharts from './components/DistributionCharts';
@@ -786,6 +787,7 @@ function DashboardModal({
 // ─── Página Principal ────────────────────────────────────────────
 export default function MetricasPage() {
   const { user } = useAuth();
+  const { logActivity } = useActivityLog();
   const [clients, setClients] = useState<Client[]>([]);
   const [interactions, setInteractions] = useState<(Interaction & { client?: Client })[]>([]);
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
@@ -831,7 +833,10 @@ export default function MetricasPage() {
       sort_order: dashboards.length,
       is_default: false,
     });
-    if (!error) { await loadData(); setShowCreateModal(false); }
+    if (!error) {
+      await logActivity({ action: 'create', module: 'metrics', entityName: String(data.name || 'Dashboard'), details: { name: data.name } });
+      await loadData(); setShowCreateModal(false);
+    }
   };
 
   const handleUpdateDashboard = async (data: Partial<Dashboard>) => {
@@ -840,12 +845,17 @@ export default function MetricasPage() {
       ...data,
       updated_at: new Date().toISOString(),
     }).eq('id', editingDashboard.id);
-    if (!error) { await loadData(); setEditingDashboard(null); }
+    if (!error) {
+      await logActivity({ action: 'update', module: 'metrics', entityId: editingDashboard.id, entityName: String(data.name || editingDashboard.name), details: { fields: Object.keys(data) } });
+      await loadData(); setEditingDashboard(null);
+    }
   };
 
   const handleDeleteDashboard = async (id: string) => {
     setDeleting(true);
+    const deletingDash = dashboards.find(d => d.id === id);
     await supabase.from('metric_dashboards').delete().eq('id', id);
+    if (deletingDash) await logActivity({ action: 'delete', module: 'metrics', entityId: id, entityName: String(deletingDash.name) });
     const remaining = dashboards.filter(d => d.id !== id);
     if (selectedDashboardId === id && remaining.length > 0) {
       setSelectedDashboardId(remaining[0].id);

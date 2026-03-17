@@ -1,28 +1,8 @@
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
-export type LogAction =
-  | 'create'
-  | 'update'
-  | 'delete'
-  | 'login'
-  | 'logout'
-  | 'view'
-  | 'export'
-  | 'move'
-  | 'send';
-
-export type LogModule =
-  | 'creators'
-  | 'deals'
-  | 'interactions'
-  | 'forms'
-  | 'form_submissions'
-  | 'users'
-  | 'settings'
-  | 'funnels'
-  | 'logistics'
-  | 'auth';
+export type LogAction = 'create' | 'update' | 'delete';
+export type LogModule = 'creators' | 'deals' | 'interactions' | 'forms' | 'users' | 'settings' | 'funnels' | 'logistics' | 'tasks' | 'financeiro' | 'metrics' | 'imports';
 
 interface LogActivityParams {
   action: LogAction;
@@ -33,7 +13,7 @@ interface LogActivityParams {
 }
 
 export const useActivityLog = () => {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
 
   const logActivity = async ({
     action,
@@ -45,57 +25,25 @@ export const useActivityLog = () => {
     try {
       if (!user) return;
 
-      const userName =
-        profile?.full_name ||
-        user.user_metadata?.full_name ||
-        user.email?.split('@')[0] ||
-        'Usuário';
-
-      const userEmail = profile?.email || user.email || '';
-
-      // Limpa dados sensíveis do details antes de gravar
-      const safeDetails = sanitizeDetails(details);
-
       const { error } = await supabase.from('activity_logs').insert({
         user_id: user.id,
-        user_name: userName,
-        user_email: userEmail,
+        user_name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
+        user_email: user.email || '',
         action,
         module,
-        entity_id: entityId || null,
-        entity_name: entityName || null,
-        details: safeDetails || {},
+        entity_id: entityId,
+        entity_name: entityName,
+        details,
         ip_address: null,
       });
 
       if (error) {
-        console.error('[ActivityLog] Erro ao gravar log:', error.message);
+        console.error('Erro ao registrar log:', error);
       }
-    } catch (err) {
-      // Log nunca deve quebrar a aplicação
-      console.error('[ActivityLog] Exceção:', err);
+    } catch (error) {
+      console.error('Erro ao registrar log:', error);
     }
   };
 
   return { logActivity };
 };
-
-// Remove campos sensíveis como senhas antes de gravar no log
-function sanitizeDetails(details?: Record<string, any>): Record<string, any> {
-  if (!details) return {};
-  const sensitive = ['password', 'senha', 'token', 'secret', 'key', 'apikey'];
-  const clean = JSON.parse(JSON.stringify(details));
-
-  function scrub(obj: any) {
-    if (!obj || typeof obj !== 'object') return;
-    for (const k of Object.keys(obj)) {
-      if (sensitive.some(s => k.toLowerCase().includes(s))) {
-        obj[k] = '***';
-      } else {
-        scrub(obj[k]);
-      }
-    }
-  }
-  scrub(clean);
-  return clean;
-}

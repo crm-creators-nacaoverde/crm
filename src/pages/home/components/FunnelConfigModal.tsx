@@ -55,6 +55,41 @@ function StageTooltip({ label, description }: { label: string; description?: str
   );
 }
 
+// ─── Campo de descrição — declarado FORA do componente para evitar perda de foco ──
+function DescriptionField({
+  stageId,
+  value,
+  bg = 'bg-gray-50',
+  onUpdate,
+}: {
+  stageId: string;
+  value: string;
+  bg?: string;
+  onUpdate: (id: string, val: string) => void;
+}) {
+  return (
+    <div className="px-3 pb-3">
+      <div className={`flex items-start gap-2 ${bg} rounded-xl p-2.5 border border-gray-100`}>
+        <i className="ri-chat-3-line text-gray-400 text-sm mt-[7px] flex-shrink-0"></i>
+        <div className="flex-1">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
+            Descrição da etapa
+          </p>
+          <textarea
+            value={value}
+            onChange={e => onUpdate(stageId, e.target.value)}
+            placeholder="Explique o objetivo desta etapa. Ex: Leads que já receberam proposta mas ainda não responderam."
+            rows={2}
+            className="w-full text-xs text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] transition-all"
+            maxLength={200}
+          />
+          <p className="text-[10px] text-gray-300 text-right mt-0.5">{value.length}/200</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────
 export default function FunnelConfigModal({
   isOpen,
@@ -147,26 +182,6 @@ export default function FunnelConfigModal({
   const lostStage = editStages.find(s => s.id === 'lost');
   const pipelineStages = editStages.filter(s => s.id !== 'won' && s.id !== 'lost');
 
-  // ─── Bloco reutilizável: campo de descrição ────────────────
-  const DescriptionField = ({ stageId, value, bg = 'bg-gray-50' }: { stageId: string; value: string; bg?: string }) => (
-    <div className={`px-3 pb-3`}>
-      <div className={`flex items-start gap-2 ${bg} rounded-xl p-2.5 border border-gray-100`}>
-        <i className="ri-chat-3-line text-gray-400 text-sm mt-[7px] flex-shrink-0"></i>
-        <div className="flex-1">
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Descrição da etapa</p>
-          <textarea
-            value={value}
-            onChange={e => updateStage(stageId, 'description', e.target.value)}
-            placeholder="Explique o objetivo desta etapa. Ex: Leads que já receberam proposta mas ainda não responderam."
-            rows={2}
-            className="w-full text-xs text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] transition-all"
-            maxLength={200}
-          />
-          <p className="text-[10px] text-gray-300 text-right mt-0.5">{value.length}/200</p>
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <Modal
@@ -267,7 +282,7 @@ export default function FunnelConfigModal({
 
                   {/* Campo de descrição expansível */}
                   {isExpanded && (
-                    <DescriptionField stageId={stage.id} value={stage.description || ''} bg="bg-gray-50" />
+                    <DescriptionField stageId={stage.id} value={stage.description || ''} bg="bg-gray-50" onUpdate={(id, val) => updateStage(id, 'description', val)} />
                   )}
                 </div>
               );
@@ -313,7 +328,7 @@ export default function FunnelConfigModal({
                     </button>
                   </div>
                   {isExpanded && (
-                    <DescriptionField stageId={stage!.id} value={stage!.description || ''} bg="bg-white" />
+                    <DescriptionField stageId={stage!.id} value={stage!.description || ''} bg="bg-white" onUpdate={(id, val) => updateStage(id, 'description', val)} />
                   )}
                 </div>
               );

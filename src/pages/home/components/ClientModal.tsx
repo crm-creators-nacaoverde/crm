@@ -3,6 +3,7 @@ import Modal from '../../../components/base/Modal';
 import Button from '../../../components/base/Button';
 import { Client, supabase } from '../../../lib/supabase';
 import { useNotificationContext } from '../../../contexts/NotificationContext';
+import { useActivityLog } from '../../../hooks/useActivityLog';
 
 interface ClientModalProps {
   isOpen: boolean;
@@ -57,6 +58,7 @@ const validateCpfCnpj = (value: string): boolean => {
 
 export default function ClientModal({ isOpen, onClose, client, onSave }: ClientModalProps) {
   const { sendNotification } = useNotificationContext();
+  const { logActivity } = useActivityLog();
   const [activeTab, setActiveTab] = useState<TabId>('obrigatorio');
   const [tiktokLinks, setTiktokLinks] = useState<string[]>(['']);
   const [gmvPeriod, setGmvPeriod] = useState<'7' | '14' | '28' | '30'>('7');
@@ -272,10 +274,12 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         const { error } = await supabase.from('clients').update(payload).eq('id', client.id);
         if (error) throw error;
         sendNotification('Creator Atualizado', { body: `${form.name} foi atualizado com sucesso.` });
+        await logActivity({ action: 'update', module: 'creators', entityId: client.id, entityName: form.name, details: { fields: Object.keys(payload) } });
       } else {
-        const { error } = await supabase.from('clients').insert([payload]);
+        const { error, data: newData } = await supabase.from('clients').insert([payload]).select('id').single();
         if (error) throw error;
         sendNotification('Novo Creator Adicionado! 🎉', { body: `${form.name} foi cadastrado com sucesso.` });
+        await logActivity({ action: 'create', module: 'creators', entityId: newData?.id, entityName: form.name });
       }
       onSave({});
       onClose();

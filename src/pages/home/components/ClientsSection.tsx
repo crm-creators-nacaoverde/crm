@@ -6,6 +6,7 @@ import Button from '../../../components/base/Button';
 import ClientModal from './ClientModal';
 import ClientDetailModal from './ClientDetailModal';
 import SendFormWhatsAppModal from '../../creators/components/SendFormWhatsAppModal';
+import ImportLeadsModal from './ImportLeadsModal';
 
 const PLATFORM_ICON: Record<string, string> = {
   TikTok:     'ri-tiktok-line',
@@ -46,6 +47,7 @@ export default function ClientsSection() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [sendFormClient, setSendFormClient] = useState<Client | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const { user, hasPermission } = useAuth();
   const { logActivity } = useActivityLog();
 
@@ -255,6 +257,14 @@ export default function ClientsSection() {
             )}
 
             {canEdit && (
+              <button
+                onClick={() => setIsImportOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer">
+                <i className="ri-file-excel-2-line text-sm text-emerald-600"></i>
+                <span className="hidden sm:inline">Importar</span>
+              </button>
+            )}
+            {canEdit && (
               <Button onClick={handleAddClient} size="md">
                 <i className="ri-add-line text-sm"></i>
                 <span className="hidden sm:inline">Novo Creator</span>
@@ -272,7 +282,6 @@ export default function ClientsSection() {
               <tr className="border-b border-gray-100">
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Creator</th>
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Categoria</th>
-                <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">CPF/CNPJ</th>
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Canais</th>
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">GMV Geral</th>
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Produtos</th>
@@ -326,15 +335,6 @@ export default function ClientsSection() {
                         <i className="ri-medal-line text-xs"></i>
                         {client.category || 'Creators'}
                       </span>
-                    </td>
-
-                    {/* CPF/CNPJ */}
-                    <td className="py-3.5 px-5">
-                      {client.cpf_cnpj ? (
-                        <span className="text-sm text-gray-600 font-mono">{client.cpf_cnpj}</span>
-                      ) : (
-                        <span className="text-xs text-gray-300 italic">—</span>
-                      )}
                     </td>
 
                     {/* ── CANAIS ── */}
@@ -515,6 +515,11 @@ export default function ClientsSection() {
       <ClientModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} client={selectedClient} onSave={handleSave} />
       <ClientDetailModal isOpen={isDetailOpen} onClose={() => setIsDetailOpen(false)} client={selectedClient} />
       <SendFormWhatsAppModal isOpen={!!sendFormClient} onClose={() => setSendFormClient(null)} client={sendFormClient} />
+      <ImportLeadsModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onImported={() => { setIsImportOpen(false); loadClients(); }}
+      />
 
       {/* Delete Confirmation */}
       {deleteConfirm && (
