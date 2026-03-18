@@ -45,15 +45,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }, []);
 
   const menuItems = [
-    { id: 'metrics', label: 'Métricas', icon: 'ri-line-chart-line', path: '/', permission: 'metrics' },
-    { id: 'clients', label: 'Creators', icon: 'ri-user-star-line', path: '/creators', permission: 'clients' },
-    { id: 'kanban', label: 'Acompanhamento', icon: 'ri-kanban-view', path: '/acompanhamento', permission: 'deals' },
-    { id: 'interactions', label: 'Interações', icon: 'ri-chat-3-line', path: '/interacoes', permission: 'interactions' },
-    { id: 'logistica', label: 'Logística', icon: 'ri-truck-line', path: '/logistica', permission: 'deals' },
-    { id: 'financeiro', label: 'Financeiro', icon: 'ri-money-dollar-circle-line', path: '/financeiro', permission: 'deals' },
-    { id: 'formularios', label: 'Formulários', icon: 'ri-survey-line', path: '/formularios', permission: 'forms' },
-    { id: 'logs', label: 'Logs', icon: 'ri-history-line', path: '/logs', permission: 'users' },
-    { id: 'settings', label: 'Configurações', icon: 'ri-settings-3-line', path: '/configuracoes', permission: 'settings' },
+    { id: 'metrics',     label: 'Métricas',       icon: 'ri-line-chart-line',          path: '/',             permission: 'metrics' },
+    { id: 'clients',     label: 'Creators',        icon: 'ri-user-star-line',           path: '/creators',     permission: 'clients' },
+    { id: 'kanban',      label: 'Acompanhamento',  icon: 'ri-kanban-view',              path: '/acompanhamento', permission: 'deals' },
+    { id: 'interactions',label: 'Interações',      icon: 'ri-chat-3-line',              path: '/interacoes',   permission: 'interactions' },
+    { id: 'logistica',   label: 'Logística',       icon: 'ri-truck-line',               path: '/logistica',    permission: 'deals' },
+    { id: 'financeiro',  label: 'Financeiro',      icon: 'ri-money-dollar-circle-line', path: '/financeiro',   permission: 'deals' },
+    { id: 'formularios', label: 'Formulários',     icon: 'ri-survey-line',              path: '/formularios',  permission: 'forms' },
+    { id: 'webhooks',    label: 'Webhooks',        icon: 'ri-webhook-line',             path: '/webhooks',     permission: 'forms' },
+    { id: 'logs',        label: 'Logs',            icon: 'ri-history-line',             path: '/logs',         permission: 'users' },
+    { id: 'settings',    label: 'Configurações',   icon: 'ri-settings-3-line',          path: '/configuracoes', permission: 'settings' },
   ];
 
   if (hasPermission('users', 'view')) {
@@ -86,26 +87,27 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   const getPageDescription = () => {
     const descriptions: Record<string, string> = {
-      '/': 'Indicadores de desempenho',
-      '/creators': 'Base de creators e influenciadores',
-      '/acompanhamento': 'Pipeline de vendas e oportunidades',
-      '/interacoes': 'Histórico de comunicações',
-      '/logistica': 'Controle de envios e rastreamento',
-      '/financeiro': 'Pagamentos e histórico financeiro',
-      '/formularios': 'Crie e gerencie formulários para creators',
+      '/':              'Indicadores de desempenho',
+      '/creators':      'Base de creators e influenciadores',
+      '/acompanhamento':'Pipeline de vendas e oportunidades',
+      '/interacoes':    'Histórico de comunicações',
+      '/logistica':     'Controle de envios e rastreamento',
+      '/financeiro':    'Pagamentos e histórico financeiro',
+      '/formularios':   'Crie e gerencie formulários para creators',
+      '/webhooks':      'Receba leads automaticamente de fontes externas',
       '/configuracoes': 'Preferências do sistema',
-      '/users': 'Gerencie acessos e permissões da equipe',
-      '/logs': 'Histórico de atividades do sistema',
+      '/users':         'Gerencie acessos e permissões da equipe',
+      '/logs':          'Histórico de atividades do sistema',
     };
     return descriptions[location.pathname] || '';
   };
 
   const getRoleLabel = (role: string) => {
     const labels: Record<string, string> = {
-      admin: 'Administrador',
-      manager: 'Gerente',
+      admin:    'Administrador',
+      manager:  'Gerente',
       operator: 'Operador',
-      viewer: 'Visualizador',
+      viewer:   'Visualizador',
     };
     return labels[role] || role;
   };
@@ -165,7 +167,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     );
   }
 
-  const mainMenuItems = menuItems.filter(item => !['settings'].includes(item.id));
+  const mainMenuItems  = menuItems.filter(item => !['settings'].includes(item.id));
   const bottomMenuItems = menuItems.filter(item => ['settings'].includes(item.id));
 
   return (
@@ -188,9 +190,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className={`h-[64px] flex items-center border-b border-gray-50 ${sidebarCollapsed ? 'px-3 justify-center' : 'px-5'}`}>
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 min-w-[36px] rounded-xl flex items-center justify-center">
-              <img 
-                src="https://static.readdy.ai/image/70e45d590e9f98e53f87ef3694a62a6d/0c4980ef84e25e6962183ed0f1e9a202.png" 
-                alt="Creator Milionário" 
+              <img
+                src="https://static.readdy.ai/image/70e45d590e9f98e53f87ef3694a62a6d/0c4980ef84e25e6962183ed0f1e9a202.png"
+                alt="Creator Milionário"
                 className="w-full h-full object-contain"
               />
             </div>
@@ -228,13 +230,17 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   }`}
                 >
                   <div className={`flex items-center justify-center ${sidebarCollapsed ? 'w-10 h-10 rounded-xl' : 'w-8 h-8 rounded-lg'} ${
-                    active ? 'bg-[#5de0e6]/20 text-[#004aad]' : 'bg-transparent group-hover:bg-gray-100 text-gray-400 group-hover:text-gray-600'
+                    active
+                      ? 'bg-[#5de0e6]/20 text-[#004aad]'
+                      : 'bg-transparent group-hover:bg-gray-100 text-gray-400 group-hover:text-gray-600'
                   } transition-all`}>
                     <i className={`${item.icon} ${sidebarCollapsed ? 'text-lg' : 'text-[17px]'}`}></i>
                   </div>
                   {!sidebarCollapsed && (
                     <div className="min-w-0 text-left">
-                      <span className={`text-[13px] block leading-tight ${active ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
+                      <span className={`text-[13px] block leading-tight ${active ? 'font-semibold' : 'font-medium'}`}>
+                        {item.label}
+                      </span>
                     </div>
                   )}
                 </button>
@@ -263,7 +269,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 }`}
               >
                 <div className={`flex items-center justify-center ${sidebarCollapsed ? 'w-10 h-10 rounded-xl' : 'w-8 h-8 rounded-lg'} ${
-                  active ? 'bg-[#5de0e6]/20 text-[#004aad]' : 'bg-transparent group-hover:bg-gray-100 text-gray-400 group-hover:text-gray-600'
+                  active
+                    ? 'bg-[#5de0e6]/20 text-[#004aad]'
+                    : 'bg-transparent group-hover:bg-gray-100 text-gray-400 group-hover:text-gray-600'
                 } transition-all`}>
                   <i className={`${item.icon} ${sidebarCollapsed ? 'text-lg' : 'text-[17px]'}`}></i>
                 </div>
@@ -313,7 +321,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
-          {/* Notifications placeholder */}
           <div className="relative" ref={notifRef}>
             <button
               onClick={() => setNotifOpen(!notifOpen)}
@@ -337,7 +344,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
             />
           </div>
 
-          {/* Divider */}
           <div className="w-px h-8 bg-gray-100 mx-1"></div>
 
           {/* Profile dropdown */}
@@ -397,7 +403,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="p-5 lg:p-6">{children}</div>
       </main>
 
-      {/* System Tour */}
       <SystemTour />
     </div>
   );
