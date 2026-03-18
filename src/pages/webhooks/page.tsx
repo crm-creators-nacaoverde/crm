@@ -43,6 +43,7 @@ const CRM_FIELDS = [
   { value: 'notes',           label: 'Observações' },
   { value: 'instagram_profile', label: 'Instagram' },
   { value: 'youtube_canal',   label: 'YouTube' },
+  { value: 'tiktok_links',    label: 'Link TikTok' },
 ];
 
 // ─── Modal de criação/edição ──────────────────────────────────────────────────
