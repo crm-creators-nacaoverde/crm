@@ -4,7 +4,7 @@ import Button from '../../components/base/Button';
 import FormCard from './components/FormCard';
 import FormBuilderModal from './components/FormBuilderModal';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
-import WebhookManagerModal from './components/WebhookManagerModal';
+
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useActivityLog } from '../../hooks/useActivityLog';
@@ -34,9 +34,6 @@ export default function FormulariosPage() {
   const [editingForm, setEditingForm] = useState<FormTemplate | null>(null);
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; form: FormTemplate | null }>({ open: false, form: null });
   const [deleting, setDeleting] = useState(false);
-
-  // ── Estado do modal de Webhook ────────────────────────────────────────────
-  const [webhookModal, setWebhookModal] = useState<{ id: string; name: string } | null>(null);
 
   const canEdit   = hasPermission('forms', 'edit');
   const canDelete = hasPermission('forms', 'delete');
@@ -261,28 +258,16 @@ export default function FormulariosPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredForms.map((form) => (
-              <div key={form.id} className="relative group/card">
-                <FormCard
-                  form={form}
-                  onEdit={() => handleEdit(form)}
-                  onDuplicate={() => handleDuplicate(form)}
-                  onToggleActive={() => handleToggleActive(form)}
-                  onDelete={() => setDeleteModal({ open: true, form })}
-                  canEdit={canEdit}
-                  canDelete={canDelete}
-                />
-                {/* ── Botão Webhook sobreposto no card ── */}
-                {canEdit && (
-                  <div className="absolute bottom-3 right-3 opacity-0 group-hover/card:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => setWebhookModal({ id: form.id, name: form.name })}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg cursor-pointer transition-colors shadow-sm whitespace-nowrap"
-                      title="Configurar Webhook">
-                      <i className="ri-webhook-line text-sm"></i>Webhook
-                    </button>
-                  </div>
-                )}
-              </div>
+              <FormCard
+                key={form.id}
+                form={form}
+                onEdit={() => handleEdit(form)}
+                onDuplicate={() => handleDuplicate(form)}
+                onToggleActive={() => handleToggleActive(form)}
+                onDelete={() => setDeleteModal({ open: true, form })}
+                canEdit={canEdit}
+                canDelete={canDelete}
+              />
             ))}
           </div>
         )}
@@ -304,15 +289,6 @@ export default function FormulariosPage() {
         loading={deleting}
       />
 
-      {/* ── Webhook Manager Modal ── */}
-      {webhookModal && (
-        <WebhookManagerModal
-          isOpen={!!webhookModal}
-          onClose={() => setWebhookModal(null)}
-          formId={webhookModal.id}
-          formName={webhookModal.name}
-        />
-      )}
     </AppLayout>
   );
 }
