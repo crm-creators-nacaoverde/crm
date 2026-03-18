@@ -14,6 +14,7 @@ import PublicFormPage from "../pages/formularios/components/PublicFormPage";
 import LogsPage from "../pages/logs/page";
 import LogisticaPage from "../pages/logistica/page";
 import FinanceiroPage from "../pages/financeiro/page";
+import WebhooksPage from "../pages/webhooks/page";
 
 const routes: RouteObject[] = [
   {
@@ -81,6 +82,10 @@ const routes: RouteObject[] = [
   {
     path: "/financeiro",
     element: <FinanceiroPage />,
+  },
+  {
+    path: "/webhooks",
+    element: <WebhooksPage />,
   },
   {
     path: "*",
