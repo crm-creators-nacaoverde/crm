@@ -34,6 +34,14 @@ const PLATFORM_COLOR: Record<string, string> = {
   Outro:      'text-gray-500 bg-gray-50',
 };
 
+// Formata número de seguidores: 1200 → 1,2K | 1500000 → 1,5M
+function formatFollowers(n: number): string {
+  if (!n || n === 0) return '—';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}M`;
+  if (n >= 1_000)     return `${(n / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}K`;
+  return n.toString();
+}
+
 export default function ClientsSection() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +59,7 @@ export default function ClientsSection() {
   const { user, hasPermission } = useAuth();
   const { logActivity } = useActivityLog();
 
-  const canEdit = hasPermission('clients', 'edit');
+  const canEdit   = hasPermission('clients', 'edit');
   const canDelete = hasPermission('clients', 'delete');
 
   useEffect(() => { loadClients(); }, []);
@@ -79,13 +87,13 @@ export default function ClientsSection() {
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (client.phone || '').includes(searchTerm) ||
       (client.produtos_divulgados || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || client.status === filterStatus;
+    const matchesStatus   = filterStatus === 'all' || client.status === filterStatus;
     const matchesPlatform = filterPlatform === 'all' || (client.platform || 'TikTok') === filterPlatform;
     const matchesCategory = filterCategory === 'all' || (client.category || 'Creators') === filterCategory;
     return matchesSearch && matchesStatus && matchesPlatform && matchesCategory;
   });
 
-  const handleAddClient = () => { setSelectedClient(null); setIsModalOpen(true); };
+  const handleAddClient  = () => { setSelectedClient(null); setIsModalOpen(true); };
   const handleEditClient = (client: Client) => { setSelectedClient(client); setIsModalOpen(true); };
   const handleViewClient = (client: Client) => { setSelectedClient(client); setIsDetailOpen(true); };
 
@@ -128,23 +136,24 @@ export default function ClientsSection() {
     }
   };
 
-  const activeCount = clients.filter(c => c.status === 'active').length;
-  const totalGmv = clients.reduce((sum, c) => sum + Number(c.gmv_geral || 0), 0);
-  const totalVideos = clients.reduce((sum, c) => sum + Number(c.videos_30d || 0), 0);
+  const activeCount  = clients.filter(c => c.status === 'active').length;
+  const totalGmv     = clients.reduce((sum, c) => sum + Number(c.gmv_geral || 0), 0);
+  const totalVideos  = clients.reduce((sum, c) => sum + Number(c.videos_30d || 0), 0);
+  // Total de seguidores somado de todos os creators
+  const totalFollowers = clients.reduce((sum, c) => sum + Number(c.followers || 0), 0);
 
   const formatCurrency = (val: number) =>
     `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
-  // Plataformas e categorias únicas dos creators cadastrados
-  const platformsInUse = Array.from(new Set(clients.map(c => c.platform || 'TikTok'))).sort();
+  const platformsInUse  = Array.from(new Set(clients.map(c => c.platform || 'TikTok'))).sort();
   const categoriesInUse = Array.from(new Set(clients.map(c => c.category || 'Creators'))).sort();
 
   const CATEGORY_COLOR: Record<string, string> = {
-    Creators: 'text-[#004aad] bg-[#004aad]/10',
-    Embaixadores: 'text-amber-700 bg-amber-50',
-    Influenciadores: 'text-purple-700 bg-purple-50',
-    Parceiros: 'text-emerald-700 bg-emerald-50',
-    Afiliados: 'text-rose-700 bg-rose-50',
+    Creators:       'text-[#004aad] bg-[#004aad]/10',
+    Embaixadores:   'text-amber-700 bg-amber-50',
+    Influenciadores:'text-purple-700 bg-purple-50',
+    Parceiros:      'text-emerald-700 bg-emerald-50',
+    Afiliados:      'text-rose-700 bg-rose-50',
   };
 
   if (loading) {
@@ -157,7 +166,8 @@ export default function ClientsSection() {
 
   return (
     <div className="space-y-5">
-      {/* Stats */}
+
+      {/* Stats — adicionado Total de Seguidores */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4">
           <div className="w-10 h-10 bg-[#5de0e6]/10 rounded-xl flex items-center justify-center">
@@ -186,13 +196,14 @@ export default function ClientsSection() {
             <p className="text-xs text-gray-400">GMV Total</p>
           </div>
         </div>
+        {/* Seguidores totais no lugar de Vídeos */}
         <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4">
-          <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center">
-            <i className="ri-video-line text-lg text-rose-600"></i>
+          <div className="w-10 h-10 bg-violet-50 rounded-xl flex items-center justify-center">
+            <i className="ri-group-line text-lg text-violet-600"></i>
           </div>
           <div>
-            <p className="text-xl font-bold text-gray-900">{totalVideos}</p>
-            <p className="text-xs text-gray-400">Vídeos (30d)</p>
+            <p className="text-xl font-bold text-gray-900">{formatFollowers(totalFollowers)}</p>
+            <p className="text-xs text-gray-400">Total Seguidores</p>
           </div>
         </div>
       </div>
@@ -200,7 +211,6 @@ export default function ClientsSection() {
       {/* Toolbar */}
       <div className="bg-white rounded-xl border border-gray-100 p-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          {/* Busca */}
           <div className="relative flex-1 w-full">
             <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
             <input
@@ -213,7 +223,6 @@ export default function ClientsSection() {
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
-            {/* Filtro Status */}
             <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
               {[{ value: 'all', label: 'Todos' }, { value: 'active', label: 'Ativos' }, { value: 'inactive', label: 'Inativos' }].map(s => (
                 <button key={s.value} onClick={() => setFilterStatus(s.value)}
@@ -223,7 +232,6 @@ export default function ClientsSection() {
               ))}
             </div>
 
-            {/* Filtro Plataforma */}
             {platformsInUse.length > 1 && (
               <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
                 <button onClick={() => setFilterPlatform('all')}
@@ -240,7 +248,6 @@ export default function ClientsSection() {
               </div>
             )}
 
-            {/* Filtro Categoria */}
             {categoriesInUse.length > 1 && (
               <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
                 <button onClick={() => setFilterCategory('all')}
@@ -283,6 +290,8 @@ export default function ClientsSection() {
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Creator</th>
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Categoria</th>
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Canais</th>
+                {/* ── COLUNA SEGUIDORES ── */}
+                <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Seguidores</th>
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">GMV Geral</th>
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Produtos</th>
                 <th className="text-left py-3.5 px-5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Comissão</th>
@@ -296,10 +305,10 @@ export default function ClientsSection() {
             </thead>
             <tbody>
               {filteredClients.map((client) => {
-                const platform = client.platform || 'TikTok';
+                const platform    = client.platform || 'TikTok';
                 const tiktokLinks = client.tiktok_links || [];
-                const instagram = (client as any).instagram_profile;
-                const youtube = (client as any).youtube_canal;
+                const instagram   = (client as any).instagram_profile;
+                const youtube     = (client as any).youtube_canal;
                 const channelCount =
                   (tiktokLinks.length > 0 ? 1 : 0) +
                   (instagram ? 1 : 0) +
@@ -337,16 +346,13 @@ export default function ClientsSection() {
                       </span>
                     </td>
 
-                    {/* ── CANAIS ── */}
+                    {/* Canais */}
                     <td className="py-3.5 px-5">
                       <div className="flex flex-col gap-1.5 min-w-[120px]">
-                        {/* Plataforma principal badge */}
                         <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold w-fit ${PLATFORM_COLOR[platform] || 'text-gray-500 bg-gray-50'}`}>
                           <i className={`${PLATFORM_ICON[platform] || 'ri-global-line'} text-xs`}></i>
                           {platform}
                         </span>
-
-                        {/* Ícones de canais extras */}
                         {channelCount > 0 && (
                           <div className="flex items-center gap-1">
                             {tiktokLinks.length > 0 && (
@@ -367,6 +373,16 @@ export default function ClientsSection() {
                             )}
                           </div>
                         )}
+                      </div>
+                    </td>
+
+                    {/* ── SEGUIDORES ── */}
+                    <td className="py-3.5 px-5">
+                      <div className="flex items-center gap-1.5">
+                        <i className="ri-group-line text-xs text-violet-400"></i>
+                        <span className="text-sm font-semibold text-gray-800">
+                          {formatFollowers(Number(client.followers || 0))}
+                        </span>
                       </div>
                     </td>
 
@@ -467,8 +483,7 @@ export default function ClientsSection() {
                             <button
                               onClick={(e) => { e.stopPropagation(); setSendFormClient(client); }}
                               className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all cursor-pointer"
-                              title="Enviar formulário via WhatsApp"
-                            >
+                              title="Enviar formulário via WhatsApp">
                               <i className="ri-send-plane-line text-sm"></i>
                             </button>
                           )}
@@ -476,8 +491,7 @@ export default function ClientsSection() {
                             <button
                               onClick={(e) => { e.stopPropagation(); handleEditClient(client); }}
                               className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-all cursor-pointer"
-                              title="Editar"
-                            >
+                              title="Editar">
                               <i className="ri-edit-line text-sm"></i>
                             </button>
                           )}
@@ -485,8 +499,7 @@ export default function ClientsSection() {
                             <button
                               onClick={(e) => { e.stopPropagation(); setDeleteConfirm(client.id); }}
                               className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
-                              title="Excluir"
-                            >
+                              title="Excluir">
                               <i className="ri-delete-bin-line text-sm"></i>
                             </button>
                           )}
