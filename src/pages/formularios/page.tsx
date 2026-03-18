@@ -4,6 +4,7 @@ import Button from '../../components/base/Button';
 import FormCard from './components/FormCard';
 import FormBuilderModal from './components/FormBuilderModal';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
+import WebhookManagerModal from './components/WebhookManagerModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useActivityLog } from '../../hooks/useActivityLog';
@@ -34,7 +35,10 @@ export default function FormulariosPage() {
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; form: FormTemplate | null }>({ open: false, form: null });
   const [deleting, setDeleting] = useState(false);
 
-  const canEdit = hasPermission('forms', 'edit');
+  // ── Estado do modal de Webhook ────────────────────────────────────────────
+  const [webhookModal, setWebhookModal] = useState<{ id: string; name: string } | null>(null);
+
+  const canEdit   = hasPermission('forms', 'edit');
   const canDelete = hasPermission('forms', 'delete');
 
   const loadForms = useCallback(async () => {
@@ -44,7 +48,6 @@ export default function FormulariosPage() {
         .from('form_templates')
         .select('*')
         .order('updated_at', { ascending: false });
-
       if (error) throw error;
       setForms(data || []);
     } catch (err) {
@@ -54,9 +57,7 @@ export default function FormulariosPage() {
     }
   }, []);
 
-  useEffect(() => {
-    loadForms();
-  }, [loadForms]);
+  useEffect(() => { loadForms(); }, [loadForms]);
 
   const handleEdit = (form: FormTemplate) => {
     setEditingForm(form);
@@ -82,15 +83,11 @@ export default function FormulariosPage() {
         .select()
         .single();
       if (error) throw error;
-      
       await logActivity({
-        action: 'create',
-        module: 'forms',
-        entityId: newForm.id,
-        entityName: `${form.name} (cópia)`,
-        details: { action: 'duplicate', sourceFormId: form.id }
+        action: 'create', module: 'forms',
+        entityId: newForm.id, entityName: `${form.name} (cópia)`,
+        details: { action: 'duplicate', sourceFormId: form.id },
       });
-      
       loadForms();
     } catch (err) {
       console.error('Erro ao duplicar:', err);
@@ -104,15 +101,11 @@ export default function FormulariosPage() {
         .update({ is_active: !form.is_active, updated_at: new Date().toISOString() })
         .eq('id', form.id);
       if (error) throw error;
-      
       await logActivity({
-        action: 'update',
-        module: 'forms',
-        entityId: form.id,
-        entityName: form.name,
-        details: { action: 'toggle_status', from: form.is_active, to: !form.is_active }
+        action: 'update', module: 'forms',
+        entityId: form.id, entityName: form.name,
+        details: { action: 'toggle_status', from: form.is_active, to: !form.is_active },
       });
-      
       loadForms();
     } catch (err) {
       console.error('Erro ao alterar status:', err);
@@ -128,15 +121,11 @@ export default function FormulariosPage() {
         .delete()
         .eq('id', deleteModal.form.id);
       if (error) throw error;
-      
       await logActivity({
-        action: 'delete',
-        module: 'forms',
-        entityId: deleteModal.form.id,
-        entityName: deleteModal.form.name,
-        details: { deletedData: deleteModal.form }
+        action: 'delete', module: 'forms',
+        entityId: deleteModal.form.id, entityName: deleteModal.form.name,
+        details: { deletedData: deleteModal.form },
       });
-      
       setDeleteModal({ open: false, form: null });
       loadForms();
     } catch (err) {
@@ -147,21 +136,24 @@ export default function FormulariosPage() {
   };
 
   const filteredForms = forms.filter((form) => {
-    const matchesSearch = form.name.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch =
+      form.name.toLowerCase().includes(search.toLowerCase()) ||
       (form.description || '').toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = filterStatus === 'all' ||
+    const matchesStatus =
+      filterStatus === 'all' ||
       (filterStatus === 'active' && form.is_active) ||
       (filterStatus === 'inactive' && !form.is_active);
     return matchesSearch && matchesStatus;
   });
 
-  const activeCount = forms.filter(f => f.is_active).length;
+  const activeCount   = forms.filter(f => f.is_active).length;
   const inactiveCount = forms.filter(f => !f.is_active).length;
-  const totalFields = forms.reduce((acc, f) => acc + (f.fields?.length || 0), 0);
+  const totalFields   = forms.reduce((acc, f) => acc + (f.fields?.length || 0), 0);
 
   return (
     <AppLayout>
       <div className="space-y-6">
+
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl border border-gray-100 p-4">
@@ -216,8 +208,7 @@ export default function FormulariosPage() {
             <div className="relative flex-1 max-w-xs">
               <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
               <input
-                type="text"
-                value={search}
+                type="text" value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar formulários..."
                 className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition-all"
@@ -225,13 +216,10 @@ export default function FormulariosPage() {
             </div>
             <div className="flex items-center gap-1 bg-gray-100 rounded-full p-1">
               {(['all', 'active', 'inactive'] as const).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status)}
+                <button key={status} onClick={() => setFilterStatus(status)}
                   className={`px-3 py-1 text-xs font-medium rounded-full transition-all cursor-pointer whitespace-nowrap ${
                     filterStatus === status ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
+                  }`}>
                   {status === 'all' ? 'Todos' : status === 'active' ? 'Ativos' : 'Inativos'}
                 </button>
               ))}
@@ -239,8 +227,7 @@ export default function FormulariosPage() {
           </div>
           {canEdit && (
             <Button onClick={handleNewForm}>
-              <i className="ri-add-line"></i>
-              Novo Formulário
+              <i className="ri-add-line"></i>Novo Formulário
             </Button>
           )}
         </div>
@@ -262,10 +249,7 @@ export default function FormulariosPage() {
               <>
                 <p className="text-sm font-medium text-gray-600 mb-1">Nenhum formulário criado</p>
                 <p className="text-xs text-gray-400 mb-5">Crie seu primeiro formulário modular para enviar aos creators</p>
-                <Button onClick={handleNewForm}>
-                  <i className="ri-add-line"></i>
-                  Criar Primeiro Formulário
-                </Button>
+                <Button onClick={handleNewForm}><i className="ri-add-line"></i>Criar Primeiro Formulário</Button>
               </>
             ) : (
               <>
@@ -277,22 +261,34 @@ export default function FormulariosPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredForms.map((form) => (
-              <FormCard
-                key={form.id}
-                form={form}
-                onEdit={() => handleEdit(form)}
-                onDuplicate={() => handleDuplicate(form)}
-                onToggleActive={() => handleToggleActive(form)}
-                onDelete={() => setDeleteModal({ open: true, form })}
-                canEdit={canEdit}
-                canDelete={canDelete}
-              />
+              <div key={form.id} className="relative group/card">
+                <FormCard
+                  form={form}
+                  onEdit={() => handleEdit(form)}
+                  onDuplicate={() => handleDuplicate(form)}
+                  onToggleActive={() => handleToggleActive(form)}
+                  onDelete={() => setDeleteModal({ open: true, form })}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                />
+                {/* ── Botão Webhook sobreposto no card ── */}
+                {canEdit && (
+                  <div className="absolute bottom-3 right-3 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => setWebhookModal({ id: form.id, name: form.name })}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg cursor-pointer transition-colors shadow-sm whitespace-nowrap"
+                      title="Configurar Webhook">
+                      <i className="ri-webhook-line text-sm"></i>Webhook
+                    </button>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Modals */}
+      {/* ── Modals ── */}
       <FormBuilderModal
         isOpen={builderOpen}
         onClose={() => { setBuilderOpen(false); setEditingForm(null); }}
@@ -307,6 +303,16 @@ export default function FormulariosPage() {
         formName={deleteModal.form?.name || ''}
         loading={deleting}
       />
+
+      {/* ── Webhook Manager Modal ── */}
+      {webhookModal && (
+        <WebhookManagerModal
+          isOpen={!!webhookModal}
+          onClose={() => setWebhookModal(null)}
+          formId={webhookModal.id}
+          formName={webhookModal.name}
+        />
+      )}
     </AppLayout>
   );
 }
