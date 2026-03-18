@@ -64,6 +64,7 @@ const FIELD_LABELS: Record<string, string> = {
   cpf_cnpj: 'CPF/CNPJ',
   platform: 'Plataforma',
   category: 'Categoria',
+  followers: 'Seguidores',
   instagram_profile: 'Instagram',
   youtube_canal: 'YouTube',
   gmv_geral: 'GMV Geral',
@@ -120,6 +121,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
     instagram_profile: '',
     youtube_canal: '',
     category: 'Creators' as string,
+    followers: '',
     gmv_geral: '',
     produtos_divulgados: '',
     comissao_organica: '',
@@ -163,6 +165,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         category: client.category || 'Creators',
         instagram_profile: (client as any).instagram_profile || '',
         youtube_canal: (client as any).youtube_canal || '',
+        followers: client.followers?.toString() || '',
         gmv_geral: client.gmv_geral?.toString() || '',
         produtos_divulgados: client.produtos_divulgados || '',
         comissao_organica: client.comissao_organica?.toString() || '',
@@ -201,6 +204,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         name: '', phone: '', cpf_cnpj: '', platform: 'TikTok',
         category: 'Creators',
         instagram_profile: '', youtube_canal: '',
+        followers: '',
         gmv_geral: '', produtos_divulgados: '',
         comissao_organica: '', comissao_trafego: '',
         gmv_interno_7d: '', gmv_interno_14d: '', gmv_interno_28d: '', gmv_interno_30d: '',
@@ -272,7 +276,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
       category: form.category,
       instagram_profile: form.instagram_profile || null,
       youtube_canal: form.youtube_canal || null,
-      followers: 0,
+      followers: parseInt(form.followers) || 0,
       revenue: parseFloat(form.gmv_geral) || 0,
       status: form.status,
       tiktok_links: validLinks,
@@ -640,7 +644,17 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className={labelClass}>Seguidores</label>
+                <div className="relative">
+                  <i className="ri-user-follow-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                  <input type="number" min="0" value={form.followers}
+                    onChange={e => setForm({ ...form, followers: e.target.value })}
+                    placeholder="0"
+                    className={`${inputClass} pl-9`} />
+                </div>
+              </div>
               <div>
                 <label className={labelClass}>GMV Geral</label>
                 <div className="relative">
