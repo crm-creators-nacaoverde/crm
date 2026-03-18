@@ -3,6 +3,16 @@ import { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
+// ── URL base da Edge Function ─────────────────────────────────────────────────
+// Usa a URL do cliente Supabase já configurado no projeto (mais confiável)
+const SUPABASE_URL = (supabase as any).supabaseUrl
+  || import.meta.env.VITE_SUPABASE_URL
+  || '';
+
+const WEBHOOK_BASE_URL = SUPABASE_URL
+  ? `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/receive-webhook`
+  : 'https://avlstqdaqhbgtyeoupck.supabase.co/functions/v1/receive-webhook';
+
 export interface WebhookEndpoint {
   id: string;
   form_id: string | null;
@@ -41,11 +51,8 @@ export function useWebhookEndpoints(formId?: string) {
   const [logs, setLogs]           = useState<WebhookLog[]>([]);
   const [loading, setLoading]     = useState(false);
 
-  // ── URL base da Edge Function ─────────────────────────────────────────────
-  const projectRef = import.meta.env.VITE_SUPABASE_URL?.replace('https://', '').split('.')[0] || '';
-  const webhookBaseUrl = `https://${projectRef}.supabase.co/functions/v1/receive-webhook`;
-
-  const getWebhookUrl = (token: string) => `${webhookBaseUrl}/${token}`;
+  const webhookBaseUrl = WEBHOOK_BASE_URL;
+  const getWebhookUrl  = (token: string) => `${webhookBaseUrl}/${token}`;
 
   // ── Buscar endpoints (por form ou todos) ─────────────────────────────────
   const fetchEndpoints = useCallback(async () => {
