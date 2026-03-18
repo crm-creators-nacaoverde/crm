@@ -146,7 +146,14 @@ Deno.serve(async (req) => {
         chave_pix_tipo: (mapped.chave_pix_tipo as string) || null,
         cpf_cnpj:       (mapped.cpf_cnpj as string) || null,
         notes:          (mapped.notes as string) || null,
-        tiktok_links:   [],
+        instagram_profile: (mapped.instagram_profile as string) || null,
+        youtube_canal:  (mapped.youtube_canal as string) || null,
+        // tiktok_links é array no banco — aceita string única ou array
+        tiktok_links: mapped.tiktok_links
+          ? Array.isArray(mapped.tiktok_links)
+            ? mapped.tiktok_links
+            : [mapped.tiktok_links as string]
+          : [],
         gmv_geral: 0, revenue: 0, followers: 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
