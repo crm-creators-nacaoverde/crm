@@ -142,7 +142,16 @@ Deno.serve(async (req) => {
         status:   'active',
         category: (mapped.category as string) || 'Creators',
         platform: (mapped.platform as string) || 'TikTok',
-        followers: mapped.followers ? parseInt(String(mapped.followers), 10) || 0 : 0,
+        // followers: aceita número direto OU ranges de texto como "10000-100000" ou "mais-100000"
+        followers: (() => {
+          const raw = String(mapped.followers || '0');
+          // Se for número puro
+          const num = parseInt(raw, 10);
+          if (!isNaN(num) && num > 0) return num;
+          // Se for range "X-Y" → pega o menor valor
+          const rangeMatch = raw.match(/(\d+)/);
+          return rangeMatch ? parseInt(rangeMatch[1], 10) : 0;
+        })(),
         chave_pix:      (mapped.chave_pix as string) || null,
         chave_pix_tipo: (mapped.chave_pix_tipo as string) || null,
         cpf_cnpj:       (mapped.cpf_cnpj as string) || null,
@@ -155,7 +164,7 @@ Deno.serve(async (req) => {
             ? mapped.tiktok_links
             : [mapped.tiktok_links as string]
           : [],
-        gmv_geral: 0, revenue: 0, followers: 0,
+        gmv_geral: 0, revenue: 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
