@@ -36,6 +36,7 @@ const CRM_FIELDS = [
   { value: 'phone',            label: 'Telefone / WhatsApp' },
   { value: 'email',            label: 'E-mail' },
   { value: 'cpf_cnpj',        label: 'CPF / CNPJ' },
+  { value: 'followers',       label: 'Seguidores' },
   { value: 'chave_pix',       label: 'Chave PIX' },
   { value: 'chave_pix_tipo',  label: 'Tipo de PIX' },
   { value: 'platform',        label: 'Plataforma' },
