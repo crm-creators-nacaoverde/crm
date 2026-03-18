@@ -142,6 +142,7 @@ Deno.serve(async (req) => {
         status:   'active',
         category: (mapped.category as string) || 'Creators',
         platform: (mapped.platform as string) || 'TikTok',
+        followers: mapped.followers ? parseInt(String(mapped.followers), 10) || 0 : 0,
         chave_pix:      (mapped.chave_pix as string) || null,
         chave_pix_tipo: (mapped.chave_pix_tipo as string) || null,
         cpf_cnpj:       (mapped.cpf_cnpj as string) || null,
