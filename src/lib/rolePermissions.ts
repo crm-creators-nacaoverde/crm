@@ -11,6 +11,7 @@ export type Permissions = {
   financeiro:   { view: boolean; edit: boolean; delete: boolean };
   logistica:    { view: boolean; edit: boolean; delete: boolean };
   webhooks:     { view: boolean; edit: boolean };
+  logs:         { view: boolean };
   metrics:      { view: boolean };
   settings:     { view: boolean; edit: boolean };
   users:        { view: boolean; edit: boolean };
@@ -25,6 +26,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Permissions> = {
     financeiro:   { view: true,  edit: true,  delete: true  },
     logistica:    { view: true,  edit: true,  delete: true  },
     webhooks:     { view: true,  edit: true                 },
+    logs:         { view: true                               },
     metrics:      { view: true                               },
     settings:     { view: true,  edit: true                 },
     users:        { view: true,  edit: true                 },
@@ -37,6 +39,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Permissions> = {
     financeiro:   { view: true,  edit: true,  delete: false },
     logistica:    { view: true,  edit: true,  delete: false },
     webhooks:     { view: true,  edit: false               },
+    logs:         { view: false                             },
     metrics:      { view: true                              },
     settings:     { view: true,  edit: false               },
     users:        { view: true,  edit: false               },
@@ -49,6 +52,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Permissions> = {
     financeiro:   { view: true,  edit: true,  delete: false },
     logistica:    { view: true,  edit: true,  delete: false },
     webhooks:     { view: false, edit: false               },
+    logs:         { view: false                             },
     metrics:      { view: true                              },
     settings:     { view: false, edit: false               },
     users:        { view: false, edit: false               },
@@ -61,6 +65,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Permissions> = {
     financeiro:   { view: true,  edit: false, delete: false },
     logistica:    { view: true,  edit: false, delete: false },
     webhooks:     { view: false, edit: false               },
+    logs:         { view: false                             },
     metrics:      { view: true                              },
     settings:     { view: false, edit: false               },
     users:        { view: false, edit: false               },
