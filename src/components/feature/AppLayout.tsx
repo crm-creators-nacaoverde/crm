@@ -54,10 +54,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { id: 'settings',    label: 'Configurações',   icon: 'ri-settings-3-line',          path: '/configuracoes',  permission: 'settings' },
   ];
 
-  if (hasPermission('users', 'view')) {
-    menuItems.push({ id: 'users', label: 'Usuários', icon: 'ri-team-line', path: '/users', permission: 'users' });
-  }
-
   const isActive = (item: typeof menuItems[0]) => {
     return location.pathname === item.path;
   };
