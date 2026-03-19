@@ -9,6 +9,7 @@ export default function ConfiguracoesPage() {
 
   const canViewLogs     = hasPermission('logs', 'view');
   const canViewWebhooks = hasPermission('webhooks', 'view');
+  const canViewForms    = hasPermission('forms', 'view');
 
   const cards = [
     {
@@ -28,6 +29,15 @@ export default function ConfiguracoesPage() {
       iconColor:   'text-amber-600',
       route:       '/configuracoes/empresa',
       available:   isAdmin,
+    },
+    {
+      title:       'Formulários',
+      description: 'Crie e gerencie formulários para enviar aos creators',
+      icon:        'ri-survey-line',
+      iconBg:      'bg-emerald-50',
+      iconColor:   'text-emerald-600',
+      route:       '/formularios',
+      available:   canViewForms,
     },
     {
       title:       'Logs do Sistema',
