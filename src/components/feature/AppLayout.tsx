@@ -51,9 +51,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { id: 'interactions',label: 'Interações',      icon: 'ri-chat-3-line',              path: '/interacoes',     permission: 'interactions' },
     { id: 'logistica',   label: 'Logística',       icon: 'ri-truck-line',               path: '/logistica',      permission: 'logistica' },
     { id: 'financeiro',  label: 'Financeiro',      icon: 'ri-money-dollar-circle-line', path: '/financeiro',     permission: 'financeiro' },
-    { id: 'formularios', label: 'Formulários',     icon: 'ri-survey-line',              path: '/formularios',    permission: 'forms' },
-    { id: 'webhooks',    label: 'Webhooks',        icon: 'ri-webhook-line',             path: '/webhooks',       permission: 'webhooks' },
-    { id: 'logs',        label: 'Logs',            icon: 'ri-history-line',             path: '/logs',           permission: 'logs' },
     { id: 'settings',    label: 'Configurações',   icon: 'ri-settings-3-line',          path: '/configuracoes',  permission: 'settings' },
   ];
 
