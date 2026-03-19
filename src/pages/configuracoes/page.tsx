@@ -10,6 +10,7 @@ export default function ConfiguracoesPage() {
   const canViewLogs     = hasPermission('logs', 'view');
   const canViewWebhooks = hasPermission('webhooks', 'view');
   const canViewForms    = hasPermission('forms', 'view');
+  const canViewUsers    = hasPermission('users', 'view');
 
   const cards = [
     {
@@ -29,6 +30,15 @@ export default function ConfiguracoesPage() {
       iconColor:   'text-amber-600',
       route:       '/configuracoes/empresa',
       available:   isAdmin,
+    },
+    {
+      title:       'Usuários',
+      description: 'Gerencie acessos e permissões da equipe',
+      icon:        'ri-group-line',
+      iconBg:      'bg-sky-50',
+      iconColor:   'text-sky-600',
+      route:       '/users',
+      available:   canViewUsers,
     },
     {
       title:       'Formulários',
