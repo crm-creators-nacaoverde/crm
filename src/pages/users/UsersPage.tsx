@@ -6,46 +6,38 @@ import Button from '../../components/base/Button';
 import Modal from '../../components/base/Modal';
 import Input from '../../components/base/Input';
 import AppLayout from '../../components/feature/AppLayout';
+import { getDefaultPermissions, ROLE_DESCRIPTIONS, type Permissions } from '../../lib/rolePermissions';
 
 interface FunnelOption { id: string; name: string; color: string; is_default: boolean; }
 
-const rolePermissions: Record<UserRole, any> = {
-  admin: {
-    clients: { view: true, edit: true, delete: true },
-    interactions: { view: true, edit: true, delete: true },
-    deals: { view: true, edit: true, delete: true },
-    forms: { view: true, edit: true, delete: true },
-    metrics: { view: true },
-    settings: { view: true, edit: true },
-    users: { view: true, edit: true },
-  },
-  manager: {
-    clients: { view: true, edit: true, delete: false },
-    interactions: { view: true, edit: true, delete: false },
-    deals: { view: true, edit: true, delete: false },
-    forms: { view: true, edit: true, delete: false },
-    metrics: { view: true },
-    settings: { view: true, edit: false },
-    users: { view: true, edit: false },
-  },
-  operator: {
-    clients: { view: true, edit: true, delete: false },
-    interactions: { view: true, edit: true, delete: false },
-    deals: { view: true, edit: true, delete: false },
-    forms: { view: true, edit: false, delete: false },
-    metrics: { view: true },
-    settings: { view: false, edit: false },
-    users: { view: false, edit: false },
-  },
-  viewer: {
-    clients: { view: true, edit: false, delete: false },
-    interactions: { view: true, edit: false, delete: false },
-    deals: { view: true, edit: false, delete: false },
-    forms: { view: true, edit: false, delete: false },
-    metrics: { view: true },
-    settings: { view: false, edit: false },
-    users: { view: false, edit: false },
-  },
+// ── Seções de permissão exibidas na aba Permissões ────────────────────────────
+const PERMISSION_SECTIONS = [
+  { key: 'clients',      label: 'Creators',         icon: 'ri-user-star-line',           actions: ['view', 'edit', 'delete'] },
+  { key: 'deals',        label: 'Acompanhamento',   icon: 'ri-kanban-view',              actions: ['view', 'edit', 'delete'] },
+  { key: 'interactions', label: 'Interações',       icon: 'ri-chat-3-line',              actions: ['view', 'edit', 'delete'] },
+  { key: 'financeiro',   label: 'Financeiro',       icon: 'ri-money-dollar-circle-line', actions: ['view', 'edit', 'delete'] },
+  { key: 'logistica',    label: 'Logística',        icon: 'ri-truck-line',               actions: ['view', 'edit', 'delete'] },
+  { key: 'forms',        label: 'Formulários',      icon: 'ri-survey-line',              actions: ['view', 'edit', 'delete'] },
+  { key: 'webhooks',     label: 'Webhooks',         icon: 'ri-webhook-line',             actions: ['view', 'edit'] },
+  { key: 'metrics',      label: 'Métricas',         icon: 'ri-pie-chart-line',           actions: ['view'] },
+  { key: 'settings',     label: 'Configurações',    icon: 'ri-settings-4-line',          actions: ['view', 'edit'] },
+  { key: 'users',        label: 'Usuários',         icon: 'ri-group-line',               actions: ['view', 'edit'] },
+];
+
+const ACTION_LABELS: Record<string, string> = { view: 'Ver', edit: 'Editar', delete: 'Excluir' };
+
+// Permissões em branco (base para merge com defaults)
+const EMPTY_PERMISSIONS: Permissions = {
+  clients:      { view: false, edit: false, delete: false },
+  deals:        { view: false, edit: false, delete: false },
+  interactions: { view: false, edit: false, delete: false },
+  forms:        { view: false, edit: false, delete: false },
+  financeiro:   { view: false, edit: false, delete: false },
+  logistica:    { view: false, edit: false, delete: false },
+  webhooks:     { view: false, edit: false               },
+  metrics:      { view: false                             },
+  settings:     { view: false, edit: false               },
+  users:        { view: false, edit: false               },
 };
 
 export default function UsersPage() {
@@ -62,13 +54,9 @@ export default function UsersPage() {
   const [filterRole, setFilterRole] = useState('all');
   const { profile, hasPermission } = useAuth();
   const { logActivity } = useActivityLog();
-
   const canEdit = hasPermission('users', 'edit');
 
-  useEffect(() => {
-    loadUsers();
-    loadFunnels();
-  }, []);
+  useEffect(() => { loadUsers(); loadFunnels(); }, []);
 
   const loadFunnels = async () => {
     const { data } = await supabase.from('funnels').select('id, name, color, is_default').order('is_default', { ascending: false });
@@ -77,8 +65,7 @@ export default function UsersPage() {
 
   const loadUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('user_profiles').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('user_profiles').select('*').order('created_at', { ascending: false });
       if (error) throw error;
       setUsers(data || []);
     } catch (error) {
@@ -106,7 +93,7 @@ export default function UsersPage() {
         permissions: updatedUser.permissions,
         is_active: updatedUser.is_active,
         allowed_funnels: updatedUser.allowed_funnels,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       }).eq('id', selectedUser.id);
       if (error) throw error;
       await logActivity({
@@ -114,8 +101,8 @@ export default function UsersPage() {
         entityId: selectedUser.id, entityName: selectedUser.full_name,
         details: {
           before: { role: selectedUser.role, permissions: selectedUser.permissions, allowed_funnels: selectedUser.allowed_funnels },
-          after: updatedUser
-        }
+          after: updatedUser,
+        },
       });
       await loadUsers();
       setShowModal(false);
@@ -129,7 +116,8 @@ export default function UsersPage() {
     full_name: string; email: string; password: string;
     role: UserRole; is_active: boolean; allowed_funnels: string[] | null;
   }) => {
-    const perms = rolePermissions[userData.role];
+    // Permissões padrão baseadas no cargo selecionado
+    const perms = getDefaultPermissions(userData.role);
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData?.session?.access_token;
     if (!token) throw new Error('Sessão expirada');
@@ -156,7 +144,7 @@ export default function UsersPage() {
     await logActivity({
       action: 'create', module: 'users',
       entityId: result.user_id || 'unknown', entityName: userData.full_name,
-      details: { email: userData.email, role: userData.role, allowed_funnels: userData.allowed_funnels }
+      details: { email: userData.email, role: userData.role, allowed_funnels: userData.allowed_funnels },
     });
     await loadUsers();
     setShowCreateModal(false);
@@ -181,10 +169,10 @@ export default function UsersPage() {
 
   const getRoleBadge = (role: UserRole) => {
     const config: Record<string, { bg: string; text: string; label: string; icon: string }> = {
-      admin:    { bg: 'bg-amber-50', text: 'text-amber-700',   label: 'Administrador', icon: 'ri-shield-star-line' },
-      manager:  { bg: 'bg-sky-50',   text: 'text-sky-700',     label: 'Gerente',       icon: 'ri-user-star-line' },
-      operator: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Operador',    icon: 'ri-user-settings-line' },
-      viewer:   { bg: 'bg-gray-50',  text: 'text-gray-600',    label: 'Visualizador',  icon: 'ri-eye-line' },
+      admin:    { bg: 'bg-amber-50',   text: 'text-amber-700',   label: 'Administrador', icon: 'ri-shield-star-line' },
+      manager:  { bg: 'bg-sky-50',     text: 'text-sky-700',     label: 'Gerente',       icon: 'ri-user-star-line' },
+      operator: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Operador',      icon: 'ri-user-settings-line' },
+      viewer:   { bg: 'bg-gray-50',    text: 'text-gray-600',    label: 'Visualizador',  icon: 'ri-eye-line' },
     };
     const c = config[role] || config.viewer;
     return (
@@ -194,7 +182,6 @@ export default function UsersPage() {
     );
   };
 
-  // Badge de acesso a funis
   const getFunnelAccessBadge = (user: UserProfile) => {
     if (user.role === 'admin' || user.allowed_funnels === null) {
       return (
@@ -221,7 +208,7 @@ export default function UsersPage() {
   };
 
   const activeCount = users.filter(u => u.is_active).length;
-  const adminCount = users.filter(u => u.role === 'admin').length;
+  const adminCount  = users.filter(u => u.role === 'admin').length;
 
   if (loading) {
     return (
@@ -264,12 +251,12 @@ export default function UsersPage() {
             <div className="relative flex-1 w-full">
               <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
               <input type="text" placeholder="Buscar por nome ou email..."
-                value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500" />
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:flex-none">
-                <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)}
+                <select value={filterRole} onChange={e => setFilterRole(e.target.value)}
                   className="w-full sm:w-auto pl-3 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 appearance-none bg-white cursor-pointer">
                   <option value="all">Todas as funções</option>
                   <option value="admin">Administrador</option>
@@ -304,7 +291,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map((u) => (
+                {filteredUsers.map(u => (
                   <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors group">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
@@ -364,13 +351,16 @@ export default function UsersPage() {
           </div>
         </div>
 
+        {/* Modals */}
         {showModal && selectedUser && (
           <EditUserModal user={selectedUser} funnels={funnels}
             onClose={() => { setShowModal(false); setSelectedUser(null); }}
             onSave={handleSaveUser} />
         )}
         {showCreateModal && (
-          <CreateUserModal funnels={funnels} onClose={() => setShowCreateModal(false)} onCreate={handleCreateUser} />
+          <CreateUserModal funnels={funnels}
+            onClose={() => setShowCreateModal(false)}
+            onCreate={handleCreateUser} />
         )}
         {showDeleteModal && userToDelete && (
           <Modal isOpen={true} onClose={() => { setShowDeleteModal(false); setUserToDelete(null); }}
@@ -385,12 +375,13 @@ export default function UsersPage() {
                   <p className="text-xs text-gray-500">{userToDelete.email}</p>
                 </div>
               </div>
-              <p className="text-sm text-gray-600">Tem certeza que deseja excluir este usuário? Todos os dados associados serão removidos permanentemente.</p>
+              <p className="text-sm text-gray-600">Tem certeza? Todos os dados associados serão removidos permanentemente.</p>
               <div className="flex gap-3 pt-4 border-t border-gray-100">
                 <Button onClick={() => { setShowDeleteModal(false); setUserToDelete(null); }} variant="outline" className="flex-1" disabled={deleting}>Cancelar</Button>
                 <button onClick={handleDeleteUser} disabled={deleting}
                   className="flex-1 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-lg transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap">
-                  {deleting ? <span className="flex items-center justify-center gap-2"><i className="ri-loader-4-line animate-spin"></i>Excluindo...</span>
+                  {deleting
+                    ? <span className="flex items-center justify-center gap-2"><i className="ri-loader-4-line animate-spin"></i>Excluindo...</span>
                     : <span className="flex items-center justify-center gap-2"><i className="ri-delete-bin-line"></i>Excluir Usuário</span>}
                 </button>
               </div>
@@ -402,17 +393,14 @@ export default function UsersPage() {
   );
 }
 
-/* ─── Funnel Access Selector (reutilizado nos 2 modais) ─── */
-function FunnelAccessSelector({
-  funnels, allowedFunnels, onChange, role,
-}: {
+/* ─── FunnelAccessSelector ─── */
+function FunnelAccessSelector({ funnels, allowedFunnels, onChange, role }: {
   funnels: FunnelOption[];
   allowedFunnels: string[] | null;
   onChange: (v: string[] | null) => void;
   role: UserRole;
 }) {
   const isUnrestricted = allowedFunnels === null;
-
   if (role === 'admin') {
     return (
       <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
@@ -421,10 +409,8 @@ function FunnelAccessSelector({
       </div>
     );
   }
-
   return (
     <div className="space-y-3">
-      {/* Toggle irrestrito */}
       <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
         <div className="flex items-center gap-2.5">
           <i className="ri-infinity-line text-emerald-500 text-base"></i>
@@ -438,14 +424,10 @@ function FunnelAccessSelector({
           <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${isUnrestricted ? 'translate-x-5' : 'translate-x-0'}`}></span>
         </button>
       </div>
-
-      {/* Lista de funis (só aparece quando restrito) */}
       {!isUnrestricted && (
         <div className="space-y-2">
           <p className="text-xs font-medium text-gray-500 px-1">Selecione os funis liberados:</p>
-          {funnels.length === 0 && (
-            <p className="text-xs text-gray-400 text-center py-3">Nenhum funil cadastrado</p>
-          )}
+          {funnels.length === 0 && <p className="text-xs text-gray-400 text-center py-3">Nenhum funil cadastrado</p>}
           {funnels.map(funnel => {
             const checked = (allowedFunnels || []).includes(funnel.id);
             return (
@@ -456,9 +438,7 @@ function FunnelAccessSelector({
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-medium text-gray-800">{funnel.name}</span>
-                  {funnel.is_default && (
-                    <span className="ml-2 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">padrão</span>
-                  )}
+                  {funnel.is_default && <span className="ml-2 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">padrão</span>}
                 </div>
                 <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${checked ? 'bg-[#004aad] border-[#004aad]' : 'border-gray-300 bg-white'}`}>
                   {checked && <i className="ri-check-line text-white text-xs"></i>}
@@ -483,26 +463,25 @@ function FunnelAccessSelector({
   );
 }
 
-/* ─── Create User Modal ─── */
+/* ─── CreateUserModal ─── */
 function CreateUserModal({ onClose, onCreate, funnels }: {
   onClose: () => void;
   funnels: FunnelOption[];
   onCreate: (data: { full_name: string; email: string; password: string; role: UserRole; is_active: boolean; allowed_funnels: string[] | null }) => Promise<void>;
 }) {
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [fullName, setFullName]             = useState('');
+  const [email, setEmail]                   = useState('');
+  const [password, setPassword]             = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState<UserRole>('operator');
-  const [isActive, setIsActive] = useState(true);
+  const [role, setRole]                     = useState<UserRole>('operator');
+  const [isActive, setIsActive]             = useState(true);
   const [allowedFunnels, setAllowedFunnels] = useState<string[] | null>([]);
-  const [showPassword, setShowPassword] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<'dados' | 'funis'>('dados');
+  const [showPassword, setShowPassword]     = useState(false);
+  const [saving, setSaving]                 = useState(false);
+  const [error, setError]                   = useState('');
+  const [errors, setErrors]                 = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab]           = useState<'dados' | 'funis'>('dados');
 
-  // Admin = irrestrito
   useEffect(() => {
     if (role === 'admin') setAllowedFunnels(null);
     else if (allowedFunnels === null) setAllowedFunnels([]);
@@ -532,11 +511,7 @@ function CreateUserModal({ onClose, onCreate, funnels }: {
     }
   };
 
-  const inputClass = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500';
-  const roleDescriptions: Record<string, string> = {
-    admin: 'Acesso total, sem restrições', manager: 'Gerencia creators, interações e formulários',
-    operator: 'Edita creators e interações', viewer: 'Apenas visualização',
-  };
+  const inp = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500';
 
   return (
     <Modal isOpen={true} onClose={onClose} title="Novo Usuário" subtitle="Preencha os dados para criar um novo acesso" size="md">
@@ -547,7 +522,6 @@ function CreateUserModal({ onClose, onCreate, funnels }: {
           </div>
         )}
 
-        {/* Tabs */}
         <div className="flex items-center bg-gray-100 rounded-xl p-1">
           {[{ id: 'dados', label: 'Dados', icon: 'ri-user-line' }, { id: 'funis', label: 'Acesso a Funis', icon: 'ri-stack-line' }].map(tab => (
             <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id as any)}
@@ -582,16 +556,41 @@ function CreateUserModal({ onClose, onCreate, funnels }: {
                 <Input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Repita a senha" error={errors.confirmPassword} />
               </div>
             </div>
+
+            {/* ── Seleção de cargo com preview de permissões ── */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Função</label>
-              <select value={role} onChange={e => setRole(e.target.value as UserRole)} className={`${inputClass} cursor-pointer`}>
+              <select value={role} onChange={e => setRole(e.target.value as UserRole)} className={`${inp} cursor-pointer`}>
                 <option value="admin">Administrador</option>
                 <option value="manager">Gerente</option>
                 <option value="operator">Operador</option>
                 <option value="viewer">Visualizador</option>
               </select>
-              <p className="mt-1.5 text-[11px] text-gray-400 flex items-center gap-1"><i className="ri-information-line"></i>{roleDescriptions[role]}</p>
+              <p className="mt-1.5 text-[11px] text-gray-400 flex items-center gap-1">
+                <i className="ri-information-line"></i>{ROLE_DESCRIPTIONS[role]}
+              </p>
             </div>
+
+            {/* Preview das permissões que serão aplicadas */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+              <p className="text-[11px] font-semibold text-blue-700 mb-2 flex items-center gap-1.5">
+                <i className="ri-shield-check-line text-sm"></i>
+                Permissões que serão aplicadas automaticamente
+              </p>
+              <div className="grid grid-cols-2 gap-1">
+                {PERMISSION_SECTIONS.map(section => {
+                  const perms = (getDefaultPermissions(role) as any)[section.key] || {};
+                  const active = Object.values(perms).some(v => v === true);
+                  return (
+                    <div key={section.key} className={`flex items-center gap-1.5 text-[10px] ${active ? 'text-blue-700' : 'text-gray-400'}`}>
+                      <i className={`${active ? 'ri-checkbox-circle-line text-blue-500' : 'ri-close-circle-line text-gray-300'} text-xs`}></i>
+                      {section.label}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <label className="flex items-center gap-2.5 cursor-pointer">
               <div className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${isActive ? 'bg-brand-500' : 'bg-gray-200'}`} onClick={() => setIsActive(!isActive)}>
                 <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${isActive ? 'translate-x-5' : 'translate-x-0'}`}></span>
@@ -608,7 +607,8 @@ function CreateUserModal({ onClose, onCreate, funnels }: {
         <div className="flex gap-3 pt-4 border-t border-gray-100">
           <Button onClick={onClose} variant="outline" className="flex-1" disabled={saving}>Cancelar</Button>
           <Button onClick={handleSubmit} className="flex-1" disabled={saving}>
-            {saving ? <span className="flex items-center justify-center gap-2"><i className="ri-loader-4-line animate-spin"></i>Criando...</span>
+            {saving
+              ? <span className="flex items-center justify-center gap-2"><i className="ri-loader-4-line animate-spin"></i>Criando...</span>
               : <span className="flex items-center justify-center gap-2"><i className="ri-user-add-line"></i>Criar Usuário</span>}
           </Button>
         </div>
@@ -617,31 +617,52 @@ function CreateUserModal({ onClose, onCreate, funnels }: {
   );
 }
 
-/* ─── Edit User Modal ─── */
+/* ─── EditUserModal ─── */
 function EditUserModal({ user, onClose, onSave, funnels }: {
   user: UserProfile; onClose: () => void;
   onSave: (user: Partial<UserProfile>) => void;
   funnels: FunnelOption[];
 }) {
-  const [role, setRole] = useState<UserRole>(user.role);
-  const [isActive, setIsActive] = useState(user.is_active);
+  const [role, setRole]           = useState<UserRole>(user.role);
+  const [isActive, setIsActive]   = useState(user.is_active);
   const [allowedFunnels, setAllowedFunnels] = useState<string[] | null>(user.allowed_funnels ?? null);
   const [activeTab, setActiveTab] = useState<'dados' | 'permissoes' | 'funis'>('dados');
-  const [permissions, setPermissions] = useState(() => ({
-    clients: { view: false, edit: false, delete: false },
-    interactions: { view: false, edit: false, delete: false },
-    deals: { view: false, edit: false, delete: false },
-    forms: { view: false, edit: false, delete: false },
-    metrics: { view: false },
-    settings: { view: false, edit: false },
-    users: { view: false, edit: false },
+
+  // ── Mesclar permissões salvas com as keys novas (garante que novos módulos apareçam) ──
+  const [permissions, setPermissions] = useState<Permissions>(() => ({
+    ...EMPTY_PERMISSIONS,
     ...user.permissions,
   }));
 
-  useEffect(() => {
-    if (role === 'admin') setAllowedFunnels(null);
-    else if (allowedFunnels === null && role !== 'admin') setAllowedFunnels([]);
-  }, [role]);
+  // ── Ao mudar o cargo, pergunta se quer aplicar as permissões padrão ────────
+  const [pendingRole, setPendingRole] = useState<UserRole | null>(null);
+  const [showRoleConfirm, setShowRoleConfirm] = useState(false);
+
+  const handleRoleChange = (newRole: UserRole) => {
+    if (newRole !== role) {
+      setPendingRole(newRole);
+      setShowRoleConfirm(true);
+    }
+  };
+
+  const applyRoleDefaults = () => {
+    if (!pendingRole) return;
+    setRole(pendingRole);
+    setPermissions(getDefaultPermissions(pendingRole));
+    if (pendingRole === 'admin') setAllowedFunnels(null);
+    else if (allowedFunnels === null) setAllowedFunnels([]);
+    setShowRoleConfirm(false);
+    setPendingRole(null);
+  };
+
+  const keepPermissions = () => {
+    if (!pendingRole) return;
+    setRole(pendingRole);
+    if (pendingRole === 'admin') setAllowedFunnels(null);
+    else if (allowedFunnels === null) setAllowedFunnels([]);
+    setShowRoleConfirm(false);
+    setPendingRole(null);
+  };
 
   const handlePermissionChange = (section: string, action: string, value: boolean) => {
     setPermissions(prev => ({ ...prev, [section]: { ...(prev as any)[section], [action]: value } }));
@@ -649,27 +670,16 @@ function EditUserModal({ user, onClose, onSave, funnels }: {
 
   const handleSubmit = () => onSave({ role, is_active: isActive, permissions, allowed_funnels: allowedFunnels });
 
-  const permissionSections = [
-    { key: 'clients',      label: 'Creators',         icon: 'ri-user-star-line',    actions: ['view', 'edit', 'delete'] },
-    { key: 'deals',        label: 'Acompanhamento',   icon: 'ri-kanban-view',        actions: ['view', 'edit', 'delete'] },
-    { key: 'interactions', label: 'Interações',       icon: 'ri-chat-3-line',        actions: ['view', 'edit', 'delete'] },
-    { key: 'forms',        label: 'Formulários',      icon: 'ri-survey-line',        actions: ['view', 'edit', 'delete'] },
-    { key: 'metrics',      label: 'Métricas',         icon: 'ri-pie-chart-line',     actions: ['view'] },
-    { key: 'settings',     label: 'Configurações',    icon: 'ri-settings-4-line',    actions: ['view', 'edit'] },
-    { key: 'users',        label: 'Usuários',         icon: 'ri-group-line',         actions: ['view', 'edit'] },
-  ];
-  const actionLabels: Record<string, string> = { view: 'Ver', edit: 'Editar', delete: 'Excluir' };
-
   const tabs = [
-    { id: 'dados', label: 'Dados', icon: 'ri-user-line' },
-    { id: 'permissoes', label: 'Permissões', icon: 'ri-shield-check-line' },
-    { id: 'funis', label: 'Acesso a Funis', icon: 'ri-stack-line' },
+    { id: 'dados',      label: 'Dados',       icon: 'ri-user-line' },
+    { id: 'permissoes', label: 'Permissões',  icon: 'ri-shield-check-line' },
+    { id: 'funis',      label: 'Funis',        icon: 'ri-stack-line' },
   ];
 
   return (
     <Modal isOpen={true} onClose={onClose} title="Editar Usuário" subtitle={user.email} size="md">
       <div className="space-y-4">
-        {/* Header */}
+        {/* Header do usuário */}
         <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
           <div className="w-10 h-10 bg-gradient-to-br from-[#5de0e6] to-[#004aad] rounded-xl flex items-center justify-center shadow-sm">
             <span className="text-white font-semibold text-sm">{user.full_name.charAt(0).toUpperCase()}</span>
@@ -679,6 +689,29 @@ function EditUserModal({ user, onClose, onSave, funnels }: {
             <p className="text-xs text-gray-400">{user.email}</p>
           </div>
         </div>
+
+        {/* Confirmação ao mudar cargo */}
+        {showRoleConfirm && pendingRole && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-start gap-2.5">
+              <i className="ri-question-line text-amber-500 text-lg mt-0.5"></i>
+              <div>
+                <p className="text-sm font-semibold text-amber-800">Mudar para {ROLE_DESCRIPTIONS[pendingRole] ? `"${['Administrador','Gerente','Operador','Visualizador'][['admin','manager','operator','viewer'].indexOf(pendingRole)]}"` : pendingRole}</p>
+                <p className="text-xs text-amber-600 mt-1">Deseja aplicar as permissões padrão deste cargo ou manter as permissões atuais?</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={applyRoleDefaults}
+                className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg cursor-pointer transition-colors">
+                <i className="ri-refresh-line mr-1"></i>Aplicar padrões do cargo
+              </button>
+              <button onClick={keepPermissions}
+                className="flex-1 px-3 py-2 text-xs font-medium text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors">
+                Manter permissões atuais
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex items-center bg-gray-100 rounded-xl p-1">
@@ -695,13 +728,14 @@ function EditUserModal({ user, onClose, onSave, funnels }: {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Função</label>
-              <select value={role} onChange={e => setRole(e.target.value as UserRole)}
+              <select value={role} onChange={e => handleRoleChange(e.target.value as UserRole)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 cursor-pointer">
                 <option value="admin">Administrador</option>
                 <option value="manager">Gerente</option>
                 <option value="operator">Operador</option>
                 <option value="viewer">Visualizador</option>
               </select>
+              <p className="mt-1 text-[11px] text-gray-400">{ROLE_DESCRIPTIONS[role]}</p>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Status</label>
@@ -716,10 +750,17 @@ function EditUserModal({ user, onClose, onSave, funnels }: {
           </div>
         )}
 
-        {/* Tab: Permissões */}
+        {/* Tab: Permissões — agora inclui todos os módulos */}
         {activeTab === 'permissoes' && (
           <div className="space-y-2">
-            {permissionSections.map(section => {
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-500">Ajuste as permissões individualmente</p>
+              <button onClick={() => setPermissions(getDefaultPermissions(role))}
+                className="text-[11px] text-[#004aad] hover:underline cursor-pointer flex items-center gap-1">
+                <i className="ri-refresh-line text-xs"></i>Restaurar padrões do cargo
+              </button>
+            </div>
+            {PERMISSION_SECTIONS.map(section => {
               const perms = (permissions as any)[section.key] || {};
               return (
                 <div key={section.key} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
@@ -735,7 +776,7 @@ function EditUserModal({ user, onClose, onSave, funnels }: {
                         <input type="checkbox" checked={perms[action] === true}
                           onChange={e => handlePermissionChange(section.key, action, e.target.checked)}
                           className={`w-3.5 h-3.5 rounded ${action === 'delete' ? 'text-rose-500' : 'text-brand-500'}`} />
-                        <span className={`text-xs ${action === 'delete' ? 'text-rose-500' : 'text-gray-500'}`}>{actionLabels[action]}</span>
+                        <span className={`text-xs ${action === 'delete' ? 'text-rose-500' : 'text-gray-500'}`}>{ACTION_LABELS[action]}</span>
                       </label>
                     ))}
                   </div>
