@@ -15,6 +15,7 @@ import LogsPage from "../pages/logs/page";
 import LogisticaPage from "../pages/logistica/page";
 import FinanceiroPage from "../pages/financeiro/page";
 import WebhooksPage from "../pages/webhooks/page";
+import ProtectedRoute from "../components/feature/ProtectedRoute";
 
 const routes: RouteObject[] = [
   {
@@ -37,24 +38,72 @@ const routes: RouteObject[] = [
     path: "/interacoes",
     element: <InteracoesPage />,
   },
-  // Hub de configurações — exibe os dois cards
+  {
+    path: "/logistica",
+    element: (
+      <ProtectedRoute permission="logistica">
+        <LogisticaPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/financeiro",
+    element: (
+      <ProtectedRoute permission="financeiro">
+        <FinanceiroPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/formularios",
+    element: (
+      <ProtectedRoute permission="forms">
+        <FormulariosPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/webhooks",
+    element: (
+      <ProtectedRoute permission="webhooks">
+        <WebhooksPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/logs",
+    element: (
+      <ProtectedRoute permission="logs">
+        <LogsPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/users",
+    element: (
+      <ProtectedRoute permission="users">
+        <UsersPage />
+      </ProtectedRoute>
+    ),
+  },
+  // Hub de configurações
   {
     path: "/configuracoes",
     element: <ConfiguracoesPage />,
   },
-  // Sub-páginas individuais
   {
     path: "/configuracoes/usuario",
     element: <ConfiguracoesUsuarioPage />,
   },
   {
     path: "/configuracoes/empresa",
-    element: <ConfiguracoesEmpresaPage />,
+    element: (
+      <ProtectedRoute permission="settings" action="edit">
+        <ConfiguracoesEmpresaPage />
+      </ProtectedRoute>
+    ),
   },
-  {
-    path: "/formularios",
-    element: <FormulariosPage />,
-  },
+  // Formulários públicos — sem proteção (acesso externo)
   {
     path: "/formulario/:token",
     element: <PublicFormPage />,
@@ -66,26 +115,6 @@ const routes: RouteObject[] = [
   {
     path: "/f/:token",
     element: <PublicFormPage />,
-  },
-  {
-    path: "/users",
-    element: <UsersPage />,
-  },
-  {
-    path: "/logs",
-    element: <LogsPage />,
-  },
-  {
-    path: "/logistica",
-    element: <LogisticaPage />,
-  },
-  {
-    path: "/financeiro",
-    element: <FinanceiroPage />,
-  },
-  {
-    path: "/webhooks",
-    element: <WebhooksPage />,
   },
   {
     path: "*",
