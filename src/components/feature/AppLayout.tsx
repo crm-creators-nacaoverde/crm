@@ -45,16 +45,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }, []);
 
   const menuItems = [
-    { id: 'metrics',     label: 'Métricas',       icon: 'ri-line-chart-line',          path: '/',             permission: 'metrics' },
-    { id: 'clients',     label: 'Creators',        icon: 'ri-user-star-line',           path: '/creators',     permission: 'clients' },
+    { id: 'metrics',     label: 'Métricas',       icon: 'ri-line-chart-line',          path: '/',               permission: 'metrics' },
+    { id: 'clients',     label: 'Creators',        icon: 'ri-user-star-line',           path: '/creators',       permission: 'clients' },
     { id: 'kanban',      label: 'Acompanhamento',  icon: 'ri-kanban-view',              path: '/acompanhamento', permission: 'deals' },
-    { id: 'interactions',label: 'Interações',      icon: 'ri-chat-3-line',              path: '/interacoes',   permission: 'interactions' },
-    { id: 'logistica',   label: 'Logística',       icon: 'ri-truck-line',               path: '/logistica',    permission: 'deals' },
-    { id: 'financeiro',  label: 'Financeiro',      icon: 'ri-money-dollar-circle-line', path: '/financeiro',   permission: 'deals' },
-    { id: 'formularios', label: 'Formulários',     icon: 'ri-survey-line',              path: '/formularios',  permission: 'forms' },
-    { id: 'webhooks',    label: 'Webhooks',        icon: 'ri-webhook-line',             path: '/webhooks',     permission: 'forms' },
-    { id: 'logs',        label: 'Logs',            icon: 'ri-history-line',             path: '/logs',         permission: 'users' },
-    { id: 'settings',    label: 'Configurações',   icon: 'ri-settings-3-line',          path: '/configuracoes', permission: 'settings' },
+    { id: 'interactions',label: 'Interações',      icon: 'ri-chat-3-line',              path: '/interacoes',     permission: 'interactions' },
+    { id: 'logistica',   label: 'Logística',       icon: 'ri-truck-line',               path: '/logistica',      permission: 'logistica' },
+    { id: 'financeiro',  label: 'Financeiro',      icon: 'ri-money-dollar-circle-line', path: '/financeiro',     permission: 'financeiro' },
+    { id: 'formularios', label: 'Formulários',     icon: 'ri-survey-line',              path: '/formularios',    permission: 'forms' },
+    { id: 'webhooks',    label: 'Webhooks',        icon: 'ri-webhook-line',             path: '/webhooks',       permission: 'webhooks' },
+    { id: 'logs',        label: 'Logs',            icon: 'ri-history-line',             path: '/logs',           permission: 'logs' },
+    { id: 'settings',    label: 'Configurações',   icon: 'ri-settings-3-line',          path: '/configuracoes',  permission: 'settings' },
   ];
 
   if (hasPermission('users', 'view')) {
