@@ -89,6 +89,7 @@ export default function CadastrosPage() {
 
       {openModule && (
         <CadastroDrawer
+          key={openModule}
           isOpen={!!openModule}
           onClose={() => setOpenModule(null)}
           title={DRAWER_CONFIG[openModule].title}
