@@ -464,9 +464,10 @@ function DashboardModal({ dashboard, onClose, onSave }: { dashboard: Dashboard |
 
 // ─── Página Principal ─────────────────────────────────────────────
 export default function MetricasPage() {
-  const { user, profile } = useAuth();
+  const { user, profile, hasPermission } = useAuth();
   const { logActivity } = useActivityLog();
-  const isAdmin = profile?.role === 'admin';
+  const isAdmin       = profile?.role === 'admin';
+  const canEditMeta   = isAdmin || hasPermission('metrics', 'edit'); // admin + gerente com permissão
 
   // ── Estado original ────────────────────────────────────────────
   const [clients, setClients]           = useState<Client[]>([]);
@@ -505,15 +506,49 @@ export default function MetricasPage() {
   const [filterGoalStatus, setFilterGoalStatus] = useState('active');
   const [myStats, setMyStats]               = useState({ creators: 0, gmv: 0, amostras: 0, interacoes: 0 });
 
-  // ── Carregar dados originais ───────────────────────────────────
+  // ── Carregar dados (filtrados por usuário se não for admin/gerente com metrics.edit) ────
   const loadData = useCallback(async () => {
     try {
+      const uid      = profile?.id;
+      const seeAll   = isAdmin || hasPermission('metrics', 'edit'); // admin e gerentes veem tudo
+
+      // Clients
+      let clientsQuery = supabase.from('clients').select('*').order('created_at', { ascending: false });
+      if (!seeAll && uid) clientsQuery = clientsQuery.eq('created_by', uid);
+
+      // Para não-admin/gerente: também pega clients dos deals atribuídos
+      let extraClientIds: string[] = [];
+      if (!seeAll && uid) {
+        const { data: myDeals } = await supabase.from('deals').select('client_id').eq('assigned_to', uid);
+        extraClientIds = (myDeals || []).map((d: any) => d.client_id).filter(Boolean);
+      }
+
+      // Interações
+      let interactionsQuery = supabase.from('interactions').select('*, clients(*)').order('date', { ascending: false });
+      if (!seeAll && uid) interactionsQuery = interactionsQuery.eq('created_by', uid);
+
       const [clientsRes, interactionsRes, dashboardsRes] = await Promise.all([
-        supabase.from('clients').select('*').order('created_at', { ascending: false }),
-        supabase.from('interactions').select('*, clients(*)').order('date', { ascending: false }),
+        clientsQuery,
+        interactionsQuery,
         supabase.from('metric_dashboards').select('*').order('sort_order', { ascending: true }),
       ]);
-      if (clientsRes.data) setClients(clientsRes.data);
+
+      if (clientsRes.data) {
+        // Mesclar com clients dos deals atribuídos (sem duplicatas)
+        if (!seeAll && extraClientIds.length > 0) {
+          const existing = new Set(clientsRes.data.map((c: any) => c.id));
+          const missing  = extraClientIds.filter(id => !existing.has(id));
+          if (missing.length > 0) {
+            const { data: extra } = await supabase.from('clients').select('*').in('id', missing);
+            setClients([...clientsRes.data, ...(extra || [])]);
+          } else {
+            setClients(clientsRes.data);
+          }
+        } else {
+          setClients(clientsRes.data);
+        }
+      }
+
       if (interactionsRes.data) setInteractions(interactionsRes.data.map((i: any) => ({ ...i, client: i.clients })));
       if (dashboardsRes.data && dashboardsRes.data.length > 0) {
         setDashboards(dashboardsRes.data);
@@ -521,7 +556,7 @@ export default function MetricasPage() {
       }
     } catch (error) { console.error('Erro ao carregar dados:', error); }
     finally { setLoading(false); }
-  }, []);
+  }, [profile, isAdmin, hasPermission]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -554,10 +589,10 @@ export default function MetricasPage() {
 
   useEffect(() => {
     const needsRanking = mainTab === 'metas' && (
-      (isAdmin && goalTab === 'ranking') || (!isAdmin && userGoalTab === 'ranking')
+      (canEditMeta && goalTab === 'ranking') || (!canEditMeta && userGoalTab === 'ranking')
     );
     if (needsRanking) loadRanking();
-  }, [mainTab, goalTab, userGoalTab, isAdmin, loadRanking]);
+  }, [mainTab, goalTab, userGoalTab, canEditMeta, loadRanking]);
 
   // ── Meu Desempenho ─────────────────────────────────────────────
   const loadMyStats = useCallback(async () => {
@@ -580,8 +615,8 @@ export default function MetricasPage() {
   }, [profile]);
 
   useEffect(() => {
-    if (mainTab === 'metas' && !isAdmin && userGoalTab === 'desempenho') loadMyStats();
-  }, [mainTab, userGoalTab, isAdmin, loadMyStats]);
+    if (mainTab === 'metas' && !canEditMeta && userGoalTab === 'desempenho') loadMyStats();
+  }, [mainTab, userGoalTab, canEditMeta, loadMyStats]);
 
   // ── Handlers CRUD metas ────────────────────────────────────────
   const handleCreateGoal  = async (data: Omit<Goal, 'id' | 'created_at' | 'updated_at'>) => { await createGoal(data); };
@@ -762,8 +797,8 @@ export default function MetricasPage() {
         ════════════════════════════════════════════════════════ */}
         {mainTab === 'metas' && (
           <>
-            {/* ── VISÃO ADMIN ── */}
-            {isAdmin && (
+            {/* ── VISÃO ADMIN / GERENTE COM PERMISSÃO ── */}
+            {canEditMeta && (
               <>
                 {/* Stats de metas */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -884,7 +919,7 @@ export default function MetricasPage() {
             )}
 
             {/* ── VISÃO USUÁRIO ── */}
-            {!isAdmin && (
+            {!canEditMeta && (
               <>
                 <div className="bg-white rounded-xl border border-gray-100 p-1 flex items-center">
                   {[{ id: 'metas', label: 'Minhas Metas', icon: 'ri-target-line' }, { id: 'ranking', label: 'Ranking', icon: 'ri-trophy-line' }, { id: 'desempenho', label: 'Meu Desempenho', icon: 'ri-bar-chart-line' }].map(t => (
