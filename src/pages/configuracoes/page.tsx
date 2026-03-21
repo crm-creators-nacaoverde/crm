@@ -51,15 +51,6 @@ export default function ConfiguracoesPage() {
       available:   canViewUsers,
     },
     {
-      title:       'Cadastros do Sistema',
-      description: 'Produtos, categorias, plataformas, fontes, transportadoras e mais',
-      icon:        'ri-database-2-line',
-      iconBg:      'bg-indigo-50',
-      iconColor:   'text-indigo-600',
-      route:       '/cadastros',
-      available:   isAdmin,
-    },
-    {
       title:       'Formulários',
       description: 'Crie e gerencie formulários para enviar aos creators',
       icon:        'ri-survey-line',
