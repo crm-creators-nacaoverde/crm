@@ -15,6 +15,7 @@ import LogsPage from "../pages/logs/page";
 import LogisticaPage from "../pages/logistica/page";
 import FinanceiroPage from "../pages/financeiro/page";
 import WebhooksPage from "../pages/webhooks/page";
+import CadastrosPage from "../pages/cadastros/page";
 import ProtectedRoute from "../components/feature/ProtectedRoute";
 
 const routes: RouteObject[] = [
@@ -87,6 +88,14 @@ const routes: RouteObject[] = [
     ),
   },
   // Hub de configurações
+  {
+    path: "/cadastros",
+    element: (
+      <ProtectedRoute permission="settings" action="edit">
+        <CadastrosPage />
+      </ProtectedRoute>
+    ),
+  },
   {
     path: "/configuracoes",
     element: <ConfiguracoesPage />,
