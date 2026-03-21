@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSampleAlerts } from '../../hooks/useSampleAlerts';
+import { CadastrosProvider } from '../../contexts/CadastrosContext';
 import NotificationPanel from './NotificationPanel';
 import SystemTour from './SystemTour';
 
@@ -164,6 +165,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const bottomMenuItems = menuItems.filter(item => ['settings'].includes(item.id));
 
   return (
+    <CadastrosProvider>
     <div className="min-h-screen bg-[#f8fafb]">
       {/* Mobile overlay */}
       {mobileMenuOpen && (
@@ -398,5 +400,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
       <SystemTour />
     </div>
+    </CadastrosProvider>
   );
 }
