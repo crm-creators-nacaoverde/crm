@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logistica:    { view: false, edit: false, delete: false },
         webhooks:     { view: false, edit: false },
         logs:         { view: false },
-        metrics:      { view: false },
+        metrics:      { view: false, edit: false },
         settings:     { view: false, edit: false },
         users:        { view: false, edit: false },
         ...(data.permissions || {}),
