@@ -20,7 +20,7 @@ const PERMISSION_SECTIONS = [
   { key: 'forms',        label: 'Formulários',      icon: 'ri-survey-line',              actions: ['view', 'edit', 'delete'] },
   { key: 'webhooks',     label: 'Webhooks',         icon: 'ri-webhook-line',             actions: ['view', 'edit'] },
   { key: 'logs',         label: 'Logs',             icon: 'ri-history-line',             actions: ['view'] },
-  { key: 'metrics',      label: 'Métricas',         icon: 'ri-pie-chart-line',           actions: ['view'] },
+  { key: 'metrics',     label: 'Métricas',         icon: 'ri-pie-chart-line',           actions: ['view', 'edit'] },
   { key: 'settings',     label: 'Configurações',    icon: 'ri-settings-4-line',          actions: ['view', 'edit'] },
   { key: 'users',        label: 'Usuários',         icon: 'ri-group-line',               actions: ['view', 'edit'] },
 ];
@@ -37,7 +37,7 @@ const EMPTY_PERMISSIONS: Permissions = {
   logistica:    { view: false, edit: false, delete: false },
   webhooks:     { view: false, edit: false               },
   logs:         { view: false                             },
-  metrics:      { view: false                             },
+  metrics:      { view: false, edit: false               },
   settings:     { view: false, edit: false               },
   users:        { view: false, edit: false               },
 };
