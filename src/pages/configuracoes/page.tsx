@@ -11,6 +11,7 @@ export default function ConfiguracoesPage() {
   const canViewWebhooks = hasPermission('webhooks', 'view');
   const canViewForms    = hasPermission('forms', 'view');
   const canViewUsers    = hasPermission('users', 'view');
+  const canEditSettings = hasPermission('settings', 'edit');
 
   const cards = [
     {
@@ -32,6 +33,15 @@ export default function ConfiguracoesPage() {
       available:   isAdmin,
     },
     {
+      title:       'Cadastros do Sistema',
+      description: 'Categorias, plataformas, fontes, produtos, transportadoras e mais',
+      icon:        'ri-list-settings-line',
+      iconBg:      'bg-slate-50',
+      iconColor:   'text-slate-600',
+      route:       '/cadastros',
+      available:   canEditSettings,
+    },
+    {
       title:       'Usuários',
       description: 'Gerencie acessos e permissões da equipe',
       icon:        'ri-group-line',
@@ -39,6 +49,15 @@ export default function ConfiguracoesPage() {
       iconColor:   'text-sky-600',
       route:       '/users',
       available:   canViewUsers,
+    },
+    {
+      title:       'Cadastros do Sistema',
+      description: 'Produtos, categorias, plataformas, fontes, transportadoras e mais',
+      icon:        'ri-database-2-line',
+      iconBg:      'bg-indigo-50',
+      iconColor:   'text-indigo-600',
+      route:       '/cadastros',
+      available:   isAdmin,
     },
     {
       title:       'Formulários',
