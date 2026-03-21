@@ -122,6 +122,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
     youtube_canal: '',
     category: 'Creators' as string,
     followers: '',
+    capture_source: '' as string,
     gmv_geral: '',
     produtos_divulgados: '',
     comissao_organica: '',
@@ -166,6 +167,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         instagram_profile: (client as any).instagram_profile || '',
         youtube_canal: (client as any).youtube_canal || '',
         followers: client.followers?.toString() || '',
+        capture_source: (client as any).capture_source || '',
         gmv_geral: client.gmv_geral?.toString() || '',
         produtos_divulgados: client.produtos_divulgados || '',
         comissao_organica: client.comissao_organica?.toString() || '',
@@ -205,6 +207,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         category: 'Creators',
         instagram_profile: '', youtube_canal: '',
         followers: '',
+        capture_source: '',
         gmv_geral: '', produtos_divulgados: '',
         comissao_organica: '', comissao_trafego: '',
         gmv_interno_7d: '', gmv_interno_14d: '', gmv_interno_28d: '', gmv_interno_30d: '',
@@ -259,6 +262,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
     const newErrors: Record<string, string> = {};
     if (!form.name.trim()) newErrors.name = 'Nome é obrigatório';
     if (!form.phone.trim()) newErrors.phone = 'Telefone é obrigatório';
+    if (!form.capture_source) newErrors.capture_source = 'Fonte de captura é obrigatória';
     if (form.cpf_cnpj && !validateCpfCnpj(form.cpf_cnpj)) newErrors.cpf_cnpj = 'CPF deve ter 11 dígitos ou CNPJ 14 dígitos';
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) setActiveTab('obrigatorio');
@@ -274,6 +278,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
       cpf_cnpj: form.cpf_cnpj,
       platform: form.platform,
       category: form.category,
+      capture_source: form.capture_source || null,
       instagram_profile: form.instagram_profile || null,
       youtube_canal: form.youtube_canal || null,
       followers: parseInt(form.followers) || 0,
@@ -642,6 +647,31 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                     className={`${inputClass} pl-9`} />
                 </div>
               </div>
+            </div>
+
+            {/* ── Fonte de Captura (obrigatório) ── */}
+            <div>
+              <label className={labelClass}>
+                Fonte de Captura <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <i className="ri-focus-3-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                <select value={form.capture_source}
+                  onChange={e => setForm({ ...form, capture_source: e.target.value })}
+                  className={`${inputClass} pl-9 cursor-pointer ${errors.capture_source ? 'border-rose-300' : ''}`}>
+                  <option value="">Selecione a fonte...</option>
+                  <option value="Hunter">Hunter</option>
+                  <option value="Campanha">Campanha</option>
+                  <option value="Formulario">Formulário</option>
+                  <option value="Indicacao">Indicação</option>
+                  <option value="Facebook">Facebook</option>
+                  <option value="Live">Live</option>
+                  <option value="Instagram">Instagram</option>
+                  <option value="WhatsApp">WhatsApp</option>
+                  <option value="Outro">Outro</option>
+                </select>
+              </div>
+              {errors.capture_source && <p className={errorClass}>{errors.capture_source}</p>}
             </div>
 
             <div className="grid grid-cols-3 gap-4">
