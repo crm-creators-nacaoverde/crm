@@ -64,6 +64,7 @@ const WIDGET_CATALOG = [
   { type: 'monthly_evolution',    label: 'Evolução Mensal',          icon: 'ri-line-chart-line',         desc: 'Evolução de creators e GMV por mês' },
   { type: 'gmv_overview',         label: 'Visão Geral de GMV',       icon: 'ri-money-dollar-circle-line',desc: 'GMV detalhado por período' },
   { type: 'rfm_summary',          label: 'Análise RFM',              icon: 'ri-user-star-line',          desc: 'Segmentação de creators por atividade, conteúdo e GMV' },
+  { type: 'goal_progress',        label: 'Progresso de Metas',       icon: 'ri-target-line',             desc: 'Metas ativas com barra de progresso em tempo real' },
 ];
 
 const DASHBOARD_COLORS = [
@@ -121,6 +122,7 @@ function WidgetRenderer({
     case 'monthly_evolution':  return <MonthlyEvolution clients={clients} gmvPeriod={gmvPeriod} />;
     case 'gmv_overview':       return <GmvOverview clients={clients} gmvPeriod={gmvPeriod} />;
     case 'rfm_summary':        return <RfmSummary clients={clients} gmvPeriod={gmvPeriod} />;
+    case 'goal_progress':      return <GoalProgressWidget />;
     default:
       return (
         <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
@@ -129,6 +131,142 @@ function WidgetRenderer({
         </div>
       );
   }
+}
+
+// ─── Widget de Progresso de Metas ────────────────────────────────
+function GoalProgressWidget() {
+  const { profile, hasPermission } = useAuth();
+  const { goals, loadGoals, buildProgress } = useGoals();
+  const canSeeAll = profile?.role === 'admin' || hasPermission('metrics', 'edit');
+
+  const [progresses, setProgresses] = useState<GoalProgress[]>([]);
+  const [loading, setLoading]       = useState(true);
+
+  useEffect(() => {
+    loadGoals(true);
+  }, [loadGoals]);
+
+  useEffect(() => {
+    if (!goals.length) { setLoading(false); return; }
+    const run = async () => {
+      setLoading(true);
+      // Admin/gerente: todas as metas ativas | Usuário: só as suas (global + individual)
+      const relevant = goals.filter(g =>
+        g.is_active && (
+          canSeeAll ||
+          g.scope === 'global' ||
+          (g.scope === 'individual' && g.assigned_to === profile?.id)
+        )
+      );
+      const results = await Promise.all(relevant.map(g => buildProgress(g, profile?.id)));
+      setProgresses(results);
+      setLoading(false);
+    };
+    run();
+  }, [goals, canSeeAll, profile, buildProgress]);
+
+  const CATEGORY_COLORS: Record<string, { bar: string; badge: string; text: string }> = {
+    hunter:    { bar: 'bg-sky-500',     badge: 'bg-sky-50 text-sky-700',      text: 'Hunter' },
+    closer:    { bar: 'bg-violet-500',  badge: 'bg-violet-50 text-violet-700', text: 'Closer' },
+    cs:        { bar: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700', text: 'CS' },
+    marketing: { bar: 'bg-amber-500',   badge: 'bg-amber-50 text-amber-700',   text: 'Marketing' },
+  };
+
+  const formatValue = (p: GoalProgress) => {
+    if (p.goal.type.startsWith('gmv')) {
+      return `R$ ${p.current_value.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} / R$ ${p.goal.target_value.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`;
+    }
+    return `${p.current_value.toLocaleString('pt-BR')} / ${p.goal.target_value.toLocaleString('pt-BR')}`;
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 p-5">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 bg-[#5de0e6]/10 rounded-lg flex items-center justify-center">
+            <i className="ri-target-line text-base text-[#004aad]"></i>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Progresso de Metas</h3>
+            <p className="text-[10px] text-gray-400">Metas ativas no período</p>
+          </div>
+        </div>
+        {progresses.length > 0 && (
+          <div className="flex items-center gap-3 text-xs text-gray-400">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+              {progresses.filter(p => p.achieved).length} atingidas
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 bg-gray-200 rounded-full"></span>
+              {progresses.filter(p => !p.achieved).length} em andamento
+            </span>
+          </div>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-6 h-6 border-2 border-[#5de0e6] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : progresses.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <i className="ri-target-line text-2xl text-gray-200 mb-2"></i>
+          <p className="text-xs text-gray-400">Nenhuma meta ativa no momento</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {progresses.map(p => {
+            const colors = CATEGORY_COLORS[p.goal.category] || CATEGORY_COLORS.hunter;
+            const barColor = p.achieved ? 'bg-emerald-500' : colors.bar;
+            const pctDisplay = p.percent;
+
+            return (
+              <div key={p.goal.id} className="space-y-1.5">
+                {/* Linha topo: título + badge categoria + % */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap ${colors.badge}`}>
+                      {colors.text}
+                    </span>
+                    <p className="text-xs font-medium text-gray-800 truncate">{p.goal.title}</p>
+                    {p.goal.scope === 'individual' && p.goal.assigned_name && (
+                      <span className="text-[10px] text-gray-400 whitespace-nowrap hidden sm:block">→ {p.goal.assigned_name}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {p.achieved && <span className="text-[10px] font-bold text-emerald-600">🎯</span>}
+                    <span className={`text-xs font-bold ${p.achieved ? 'text-emerald-600' : pctDisplay >= p.goal.notify_at_percent ? 'text-amber-600' : 'text-gray-700'}`}>
+                      {pctDisplay}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Barra de progresso */}
+                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ease-out ${barColor}`}
+                    style={{ width: `${pctDisplay}%` }}
+                  />
+                </div>
+
+                {/* Linha inferior: valor atual / alvo + dias restantes */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-gray-400">{formatValue(p)}</span>
+                  {p.days_remaining !== null && (
+                    <span className={`text-[10px] font-medium ${p.days_remaining === 0 ? 'text-rose-500' : p.days_remaining <= 3 ? 'text-amber-500' : 'text-gray-400'}`}>
+                      {p.days_remaining === 0 ? 'Encerrado' : p.days_remaining === 1 ? '1 dia restante' : `${p.days_remaining} dias`}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Sub-componentes originais ────────────────────────────────────
