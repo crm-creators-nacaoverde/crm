@@ -1,7 +1,4 @@
 // src/lib/rolePermissions.ts
-// ─── Permissões padrão por cargo ─────────────────────────────────────────────
-// Ao selecionar um cargo, essas permissões são aplicadas automaticamente.
-// O admin pode ajustar individualmente depois na aba Permissões.
 
 export type Permissions = {
   clients:      { view: boolean; edit: boolean; delete: boolean };
@@ -12,7 +9,7 @@ export type Permissions = {
   logistica:    { view: boolean; edit: boolean; delete: boolean };
   webhooks:     { view: boolean; edit: boolean };
   logs:         { view: boolean };
-  metrics:      { view: boolean };
+  metrics:      { view: boolean; edit: boolean };
   settings:     { view: boolean; edit: boolean };
   users:        { view: boolean; edit: boolean };
 };
@@ -27,7 +24,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Permissions> = {
     logistica:    { view: true,  edit: true,  delete: true  },
     webhooks:     { view: true,  edit: true                 },
     logs:         { view: true                               },
-    metrics:      { view: true                               },
+    metrics:      { view: true,  edit: true                 },
     settings:     { view: true,  edit: true                 },
     users:        { view: true,  edit: true                 },
   },
@@ -40,7 +37,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Permissions> = {
     logistica:    { view: true,  edit: true,  delete: false },
     webhooks:     { view: true,  edit: false               },
     logs:         { view: false                             },
-    metrics:      { view: true                              },
+    metrics:      { view: true,  edit: true                 },
     settings:     { view: true,  edit: false               },
     users:        { view: true,  edit: false               },
   },
@@ -53,7 +50,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Permissions> = {
     logistica:    { view: true,  edit: true,  delete: false },
     webhooks:     { view: false, edit: false               },
     logs:         { view: false                             },
-    metrics:      { view: true                              },
+    metrics:      { view: true,  edit: false               },
     settings:     { view: false, edit: false               },
     users:        { view: false, edit: false               },
   },
@@ -66,7 +63,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Permissions> = {
     logistica:    { view: true,  edit: false, delete: false },
     webhooks:     { view: false, edit: false               },
     logs:         { view: false                             },
-    metrics:      { view: true                              },
+    metrics:      { view: true,  edit: false               },
     settings:     { view: false, edit: false               },
     users:        { view: false, edit: false               },
   },
@@ -81,8 +78,8 @@ export const ROLE_LABELS: Record<string, string> = {
 
 export const ROLE_DESCRIPTIONS: Record<string, string> = {
   admin:    'Acesso total ao sistema, incluindo usuários e configurações da empresa',
-  manager:  'Acesso completo a creators, financeiro e logística. Não gerencia usuários nem configs',
-  operator: 'Cria e edita registros. Não pode excluir nem acessar configurações',
+  manager:  'Acesso completo a creators, financeiro, logística e gestão de metas',
+  operator: 'Cria e edita registros. Visualiza métricas mas não gerencia metas',
   viewer:   'Somente visualização. Não pode criar, editar ou excluir nada',
 };
 
