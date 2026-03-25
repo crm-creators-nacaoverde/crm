@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -12,141 +12,136 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // ── Autenticar usuário ─────────────────────────────────────────────────
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const db = createClient(supabaseUrl, serviceKey);
 
-    // ── Verificar permissão whatsapp ───────────────────────────────────────
-    const { data: profile } = await db
-      .from("user_profiles")
-      .select("role, permissions, full_name")
-      .eq("id", user.id)
-      .maybeSingle();
+    // ── Buscar config para validar webhook_secret ──────────────────────────
+    const { data: config } = await db
+      .from("wa_config")
+      .select("api_url, api_key, instance_name, webhook_secret")
+      .limit(1)
+      .single();
 
-    const hasAccess = profile?.role === "admin" || profile?.role === "manager" ||
-      (profile?.permissions?.whatsapp?.view === true);
-    if (!hasAccess) {
-      return new Response(JSON.stringify({ error: "Sem permissão" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { conversation_id, message, message_type = "text" } = await req.json();
-    if (!conversation_id || !message) {
-      return new Response(JSON.stringify({ error: "conversation_id e message são obrigatórios" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // ── Buscar conversa + config ───────────────────────────────────────────
-    const [{ data: conv }, { data: config }] = await Promise.all([
-      db.from("wa_conversations").select("remote_jid, status").eq("id", conversation_id).single(),
-      db.from("wa_config").select("api_url, api_key, instance_name").limit(1).single(),
-    ]);
-
-    if (!conv) {
-      return new Response(JSON.stringify({ error: "Conversa não encontrada" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (!config?.api_url || !config?.api_key) {
-      return new Response(JSON.stringify({ error: "Evolution API não configurada" }), {
-        status: 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // ── Enviar via Evolution API ───────────────────────────────────────────
-    const number = conv.remote_jid.replace("@s.whatsapp.net", "").replace("@c.us", "");
-    const evoResponse = await fetch(
-      `${config.api_url}/message/sendText/${config.instance_name}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": config.api_key,
-        },
-        body: JSON.stringify({
-          number,
-          text: message,
-          delay: 1000,
-        }),
+    // Validar x-api-key se webhook_secret estiver configurado
+    if (config?.webhook_secret) {
+      const incomingKey = req.headers.get("x-api-key");
+      if (incomingKey !== config.webhook_secret) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-    );
-
-    const evoData = await evoResponse.json();
-    const waMessageId = evoData?.key?.id || evoData?.id || null;
-
-    if (!evoResponse.ok) {
-      // Registrar falha mas não travar o fluxo
-      await db.from("wa_messages").insert({
-        conversation_id,
-        direction: "outbound",
-        message_type,
-        body: message,
-        wa_message_id: null,
-        sent_by: user.id,
-        sent_by_name: profile?.full_name || user.email,
-        status: "failed",
-      });
-      return new Response(JSON.stringify({ error: "Falha ao enviar pelo WhatsApp", details: evoData }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
-    // ── Persistir mensagem enviada ─────────────────────────────────────────
-    const { data: savedMsg } = await db.from("wa_messages").insert({
-      conversation_id,
-      direction: "outbound",
-      message_type,
-      body: message,
-      wa_message_id: waMessageId,
-      sent_by: user.id,
-      sent_by_name: profile?.full_name || user.email,
-      status: "sent",
-    }).select().single();
+    const body = await req.json();
+    console.log("[wa-webhook] evento recebido:", body?.event, body?.instance);
 
-    // Atualizar preview da conversa
-    await db.from("wa_conversations").update({
-      last_message: message,
-      last_message_at: new Date().toISOString(),
-      status: conv.status === "pending" ? "open" : conv.status,
-      updated_at: new Date().toISOString(),
-    }).eq("id", conversation_id);
+    const event = body?.event;
+    const data  = body?.data;
 
-    return new Response(JSON.stringify({ ok: true, message: savedMsg }), {
+    // ── Evento: MESSAGES_UPSERT (mensagem recebida) ────────────────────────
+    if (event === "messages.upsert" && data?.key) {
+      const key        = data.key;
+      const remoteJid  = key.remoteJid;
+      const fromMe     = key.fromMe ?? false;
+      const waId       = key.id;
+      const messageType = Object.keys(data?.message || {})[0] || "text";
+      const body_text  =
+        data?.message?.conversation ||
+        data?.message?.extendedTextMessage?.text ||
+        data?.message?.imageMessage?.caption ||
+        null;
+
+      if (!remoteJid || remoteJid.includes("@g.us")) {
+        // Ignorar grupos
+        return new Response(JSON.stringify({ ok: true, skipped: "group" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Buscar ou criar conversa
+      let { data: conv } = await db
+        .from("wa_conversations")
+        .select("id, status, unread_count")
+        .eq("remote_jid", remoteJid)
+        .maybeSingle();
+
+      if (!conv) {
+        // Tentar encontrar cliente pelo telefone
+        const phone = remoteJid.replace("@s.whatsapp.net", "").replace("@c.us", "");
+        const { data: client } = await db
+          .from("clients")
+          .select("id, name")
+          .or(`phone.eq.${phone},whatsapp.eq.${phone}`)
+          .maybeSingle();
+
+        const { data: newConv } = await db
+          .from("wa_conversations")
+          .insert({
+            remote_jid: remoteJid,
+            client_id:   client?.id   || null,
+            client_name: client?.name || phone,
+            status: "pending",
+            last_message: body_text,
+            last_message_at: new Date().toISOString(),
+            unread_count: fromMe ? 0 : 1,
+          })
+          .select()
+          .single();
+
+        conv = newConv;
+      } else {
+        // Atualizar conversa existente
+        await db.from("wa_conversations").update({
+          last_message: body_text,
+          last_message_at: new Date().toISOString(),
+          unread_count: fromMe ? conv.unread_count : (conv.unread_count || 0) + 1,
+          updated_at: new Date().toISOString(),
+        }).eq("id", conv.id);
+      }
+
+      if (!conv?.id) {
+        return new Response(JSON.stringify({ error: "Falha ao criar conversa" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Salvar mensagem (evitar duplicatas pelo wa_message_id)
+      const { error: msgError } = await db.from("wa_messages").upsert({
+        conversation_id: conv.id,
+        direction: fromMe ? "outbound" : "inbound",
+        message_type: messageType === "conversation" ? "text" : messageType.replace("Message", ""),
+        body: body_text,
+        wa_message_id: waId,
+        status: "delivered",
+      }, { onConflict: "wa_message_id", ignoreDuplicates: true });
+
+      if (msgError) {
+        console.error("[wa-webhook] erro ao salvar mensagem:", msgError);
+      }
+    }
+
+    // ── Evento: CONNECTION_UPDATE (status de conexão) ──────────────────────
+    if (event === "connection.update") {
+      const state = data?.state;
+      const isConnected = state === "open";
+      const qrCode = data?.qrcode?.base64 || null;
+
+      await db.from("wa_config").update({
+        is_connected: isConnected,
+        qr_code: qrCode,
+        updated_at: new Date().toISOString(),
+      }).eq("instance_name", body?.instance || config?.instance_name);
+    }
+
+    return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (err) {
-    console.error("[wa-send] error:", err);
+    console.error("[wa-webhook] error:", err);
     return new Response(JSON.stringify({ error: "Erro interno" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
