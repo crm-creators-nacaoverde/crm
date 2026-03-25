@@ -12,7 +12,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // ── Autenticar usuário ─────────────────────────────────────────────────
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -38,15 +37,18 @@ Deno.serve(async (req) => {
 
     const db = createClient(supabaseUrl, serviceKey);
 
-    // ── Verificar permissão whatsapp ───────────────────────────────────────
+    // Verificar permissão
     const { data: profile } = await db
       .from("user_profiles")
       .select("role, permissions, full_name")
       .eq("id", user.id)
       .maybeSingle();
 
-    const hasAccess = profile?.role === "admin" || profile?.role === "manager" ||
-      (profile?.permissions?.whatsapp?.view === true);
+    const hasAccess =
+      profile?.role === "admin" ||
+      profile?.role === "manager" ||
+      profile?.permissions?.whatsapp?.view === true;
+
     if (!hasAccess) {
       return new Response(JSON.stringify({ error: "Sem permissão" }), {
         status: 403,
@@ -54,7 +56,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { conversation_id, message, message_type = "text" } = await req.json();
+    const body = await req.json();
+    const { conversation_id, message, message_type = "text" } = body;
+
     if (!conversation_id || !message) {
       return new Response(JSON.stringify({ error: "conversation_id e message são obrigatórios" }), {
         status: 400,
@@ -62,13 +66,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── Buscar conversa + config ───────────────────────────────────────────
-    const [{ data: conv }, { data: config }] = await Promise.all([
-      db.from("wa_conversations").select("remote_jid, status").eq("id", conversation_id).single(),
+    // Buscar conversa + config
+    const [{ data: conv, error: convErr }, { data: config }] = await Promise.all([
+      db.from("wa_conversations").select("id, remote_jid, status").eq("id", conversation_id).single(),
       db.from("wa_config").select("api_url, api_key, instance_name").limit(1).single(),
     ]);
 
-    if (!conv) {
+    if (convErr || !conv) {
       return new Response(JSON.stringify({ error: "Conversa não encontrada" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -82,10 +86,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── Enviar via Evolution API ───────────────────────────────────────────
-    const number = conv.remote_jid.replace("@s.whatsapp.net", "").replace("@c.us", "");
+    // Enviar via Evolution API
+    const number = conv.remote_jid
+      .replace("@s.whatsapp.net", "")
+      .replace("@c.us", "");
+
+    const apiUrl = config.api_url.replace(/\/$/, "");
+
     const evoResponse = await fetch(
-      `${config.api_url}/message/sendText/${config.instance_name}`,
+      `${apiUrl}/message/sendText/${config.instance_name}`,
       {
         method: "POST",
         headers: {
@@ -101,10 +110,11 @@ Deno.serve(async (req) => {
     );
 
     const evoData = await evoResponse.json();
+    console.log("[wa-send] evo response:", JSON.stringify(evoData));
+
     const waMessageId = evoData?.key?.id || evoData?.id || null;
 
     if (!evoResponse.ok) {
-      // Registrar falha mas não travar o fluxo
       await db.from("wa_messages").insert({
         conversation_id,
         direction: "outbound",
@@ -115,23 +125,35 @@ Deno.serve(async (req) => {
         sent_by_name: profile?.full_name || user.email,
         status: "failed",
       });
-      return new Response(JSON.stringify({ error: "Falha ao enviar pelo WhatsApp", details: evoData }), {
+
+      return new Response(JSON.stringify({
+        error: "Falha ao enviar pelo WhatsApp",
+        details: evoData,
+      }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // ── Persistir mensagem enviada ─────────────────────────────────────────
-    const { data: savedMsg } = await db.from("wa_messages").insert({
-      conversation_id,
-      direction: "outbound",
-      message_type,
-      body: message,
-      wa_message_id: waMessageId,
-      sent_by: user.id,
-      sent_by_name: profile?.full_name || user.email,
-      status: "sent",
-    }).select().single();
+    // Salvar mensagem enviada
+    const { data: savedMsg, error: saveErr } = await db
+      .from("wa_messages")
+      .insert({
+        conversation_id,
+        direction: "outbound",
+        message_type,
+        body: message,
+        wa_message_id: waMessageId,
+        sent_by: user.id,
+        sent_by_name: profile?.full_name || user.email,
+        status: "sent",
+      })
+      .select()
+      .single();
+
+    if (saveErr) {
+      console.error("[wa-send] erro ao salvar mensagem:", saveErr);
+    }
 
     // Atualizar preview da conversa
     await db.from("wa_conversations").update({
@@ -147,7 +169,7 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error("[wa-send] error:", err);
-    return new Response(JSON.stringify({ error: "Erro interno" }), {
+    return new Response(JSON.stringify({ error: "Erro interno", details: String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
