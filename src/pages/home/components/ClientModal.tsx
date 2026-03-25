@@ -4,7 +4,6 @@ import Button from '../../../components/base/Button';
 import { Client, supabase } from '../../../lib/supabase';
 import { useNotificationContext } from '../../../contexts/NotificationContext';
 import { useActivityLog } from '../../../hooks/useActivityLog';
-import { useClientHistory, historyEvent } from '../../../hooks/useClientHistory';
 
 interface ClientModalProps {
   isOpen: boolean;
@@ -28,14 +27,9 @@ const PIX_TIPOS = [
   { value: 'aleatoria', label: 'Chave Aleatória' },
 ];
 
-const CATEGORIAS = [
-  'Creators', 'Embaixadores', 'Influenciadores', 'Parceiros', 'Afiliados',
-];
-
-const PLATAFORMAS = [
-  'TikTok', 'Instagram', 'YouTube', 'Kwai', 'Facebook',
-  'Twitter/X', 'Twitch', 'Pinterest', 'LinkedIn', 'Outro',
-];
+// Fallbacks caso o banco esteja vazio
+const CATEGORIAS_DEFAULT = ['Creators', 'Embaixadores', 'Influenciadores', 'Parceiros', 'Afiliados'];
+const PLATAFORMAS_DEFAULT = ['TikTok', 'Instagram', 'YouTube', 'Kwai', 'Facebook', 'Twitter/X', 'Twitch', 'Pinterest', 'LinkedIn', 'Outro'];
 
 const formatCpfCnpj = (value: string): string => {
   const digits = value.replace(/\D/g, '');
@@ -57,54 +51,27 @@ const validateCpfCnpj = (value: string): boolean => {
   return digits.length === 11 || digits.length === 14 || digits.length === 0;
 };
 
-// Labels legíveis para cada campo no histórico
-const FIELD_LABELS: Record<string, string> = {
-  name: 'Nome',
-  phone: 'Telefone',
-  cpf_cnpj: 'CPF/CNPJ',
-  platform: 'Plataforma',
-  category: 'Categoria',
-  followers: 'Seguidores',
-  instagram_profile: 'Instagram',
-  youtube_canal: 'YouTube',
-  gmv_geral: 'GMV Geral',
-  produtos_divulgados: 'Produtos Divulgados',
-  comissao_organica: 'Comissão Orgânica',
-  comissao_trafego: 'Comissão Tráfego',
-  gmv_interno_7d: 'GMV 7d',
-  gmv_interno_14d: 'GMV 14d',
-  gmv_interno_28d: 'GMV 28d',
-  gmv_interno_30d: 'GMV 30d',
-  whatsapp_group_link: 'Link WhatsApp',
-  videos_7d: 'Vídeos 7d',
-  videos_14d: 'Vídeos 14d',
-  videos_28d: 'Vídeos 28d',
-  videos_30d: 'Vídeos 30d',
-  lives_7d: 'Lives 7d',
-  lives_14d: 'Lives 14d',
-  lives_28d: 'Lives 28d',
-  lives_30d: 'Lives 30d',
-  status: 'Status',
-  endereco_cep: 'CEP',
-  endereco_rua: 'Rua',
-  endereco_numero: 'Número',
-  endereco_complemento: 'Complemento',
-  endereco_bairro: 'Bairro',
-  endereco_cidade: 'Cidade',
-  endereco_estado: 'Estado',
-  chave_pix: 'Chave PIX',
-  chave_pix_tipo: 'Tipo PIX',
-  codigo_rastreio: 'Código de Rastreio',
-  amostra_enviada: 'Amostra Enviada',
-  amostra_data_envio: 'Data de Envio',
-  amostra_observacao: 'Observação da Amostra',
-};
-
 export default function ClientModal({ isOpen, onClose, client, onSave }: ClientModalProps) {
   const { sendNotification } = useNotificationContext();
   const { logActivity } = useActivityLog();
-  const { logClientEvent } = useClientHistory();
+  const [categorias, setCategorias] = useState<string[]>(CATEGORIAS_DEFAULT);
+  const [plataformas, setPlataformas] = useState<{ name: string; icon: string; color: string }[]>([]);
+  const [fontes, setFontes] = useState<string[]>([]);
 
+  useEffect(() => {
+    const loadCadastros = async () => {
+      const [catRes, platRes, srcRes] = await Promise.all([
+        supabase.from('creator_categories').select('name').eq('is_active', true).order('sort_order'),
+        supabase.from('platforms').select('name, icon, color').eq('is_active', true).order('sort_order'),
+        supabase.from('capture_sources').select('name').eq('is_active', true).order('sort_order'),
+      ]);
+      if (catRes.data && catRes.data.length > 0) setCategorias(catRes.data.map(c => c.name));
+      if (platRes.data && platRes.data.length > 0) setPlataformas(platRes.data);
+      else setPlataformas(PLATAFORMAS_DEFAULT.map(n => ({ name: n, icon: 'ri-global-line', color: '#6b7280' })));
+      if (srcRes.data && srcRes.data.length > 0) setFontes(srcRes.data.map(s => s.name));
+    };
+    loadCadastros();
+  }, []);
   const [activeTab, setActiveTab] = useState<TabId>('obrigatorio');
   const [tiktokLinks, setTiktokLinks] = useState<string[]>(['']);
   const [gmvPeriod, setGmvPeriod] = useState<'7' | '14' | '28' | '30'>('7');
@@ -121,7 +88,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
     instagram_profile: '',
     youtube_canal: '',
     category: 'Creators' as string,
-    followers: '',
     capture_source: '' as string,
     gmv_geral: '',
     produtos_divulgados: '',
@@ -164,10 +130,9 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         cpf_cnpj: client.cpf_cnpj || '',
         platform: client.platform || 'TikTok',
         category: client.category || 'Creators',
+        capture_source: (client as any).capture_source || '',
         instagram_profile: (client as any).instagram_profile || '',
         youtube_canal: (client as any).youtube_canal || '',
-        followers: client.followers?.toString() || '',
-        capture_source: (client as any).capture_source || '',
         gmv_geral: client.gmv_geral?.toString() || '',
         produtos_divulgados: client.produtos_divulgados || '',
         comissao_organica: client.comissao_organica?.toString() || '',
@@ -204,10 +169,8 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
     } else {
       setForm({
         name: '', phone: '', cpf_cnpj: '', platform: 'TikTok',
-        category: 'Creators',
+        category: 'Creators', capture_source: '',
         instagram_profile: '', youtube_canal: '',
-        followers: '',
-        capture_source: '',
         gmv_geral: '', produtos_divulgados: '',
         comissao_organica: '', comissao_trafego: '',
         gmv_interno_7d: '', gmv_interno_14d: '', gmv_interno_28d: '', gmv_interno_30d: '',
@@ -262,7 +225,6 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
     const newErrors: Record<string, string> = {};
     if (!form.name.trim()) newErrors.name = 'Nome é obrigatório';
     if (!form.phone.trim()) newErrors.phone = 'Telefone é obrigatório';
-    if (!form.capture_source) newErrors.capture_source = 'Fonte de captura é obrigatória';
     if (form.cpf_cnpj && !validateCpfCnpj(form.cpf_cnpj)) newErrors.cpf_cnpj = 'CPF deve ter 11 dígitos ou CNPJ 14 dígitos';
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) setActiveTab('obrigatorio');
@@ -281,7 +243,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
       capture_source: form.capture_source || null,
       instagram_profile: form.instagram_profile || null,
       youtube_canal: form.youtube_canal || null,
-      followers: parseInt(form.followers) || 0,
+      followers: 0,
       revenue: parseFloat(form.gmv_geral) || 0,
       status: form.status,
       tiktok_links: validLinks,
@@ -319,136 +281,22 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
     };
   };
 
-  // ─── Detecta quais grupos de campos foram alterados no modo edição ───────────
-  const detectChanges = (payload: ReturnType<typeof buildPayload>) => {
-    if (!client) return { dadosCadastrais: [], metricas: [], pix: false, amostra: false };
-
-    const dadosCadastraisKeys = [
-      'name', 'phone', 'cpf_cnpj', 'platform', 'category',
-      'instagram_profile', 'youtube_canal', 'produtos_divulgados',
-      'status', 'whatsapp_group_link',
-    ];
-    const metricasKeys = [
-      'gmv_geral', 'gmv_interno_7d', 'gmv_interno_14d', 'gmv_interno_28d', 'gmv_interno_30d',
-      'comissao_organica', 'comissao_trafego',
-      'videos_7d', 'videos_14d', 'videos_28d', 'videos_30d',
-      'lives_7d', 'lives_14d', 'lives_28d', 'lives_30d',
-    ];
-    const pixKeys = ['chave_pix', 'chave_pix_tipo'];
-    const amostraKeys = ['amostra_enviada', 'amostra_data_envio', 'amostra_observacao', 'codigo_rastreio'];
-
-    const changed = (keys: string[]) =>
-      keys.filter(k => String((payload as any)[k] ?? '') !== String((client as any)[k] ?? ''));
-
-    const dadosCadastrais = changed(dadosCadastraisKeys).map(k => FIELD_LABELS[k] ?? k);
-    const metricas = changed(metricasKeys).map(k => FIELD_LABELS[k] ?? k);
-    const pix = changed(pixKeys).length > 0;
-    const amostra = changed(amostraKeys).length > 0;
-
-    return { dadosCadastrais, metricas, pix, amostra };
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
     const payload = buildPayload();
-
     try {
       if (client) {
-        // ── MODO EDIÇÃO ──────────────────────────────────────────────────────
         const { error } = await supabase.from('clients').update(payload).eq('id', client.id);
         if (error) throw error;
-
         sendNotification('Creator Atualizado', { body: `${form.name} foi atualizado com sucesso.` });
-        await logActivity({
-          action: 'update', module: 'creators',
-          entityId: client.id, entityName: form.name,
-          details: { fields: Object.keys(payload) },
-        });
-
-        // ── Registrar no histórico do creator o que mudou ────────────────────
-        const { dadosCadastrais, metricas, pix, amostra } = detectChanges(payload);
-
-        if (dadosCadastrais.length > 0) {
-          await logClientEvent({
-            client_id: client.id,
-            ...historyEvent.edicaoDados(dadosCadastrais),
-          });
-        }
-
-        if (metricas.length > 0) {
-          const metaObj: Record<string, unknown> = {};
-          metricas.forEach(label => { metaObj[label] = ''; });
-          await logClientEvent({
-            client_id: client.id,
-            ...historyEvent.resultadoAtualizado(
-              Object.fromEntries(
-                metricas.map(label => [label, (payload as any)[
-                  Object.keys(FIELD_LABELS).find(k => FIELD_LABELS[k] === label) ?? ''
-                ] ?? ''])
-              )
-            ),
-          });
-        }
-
-        if (pix && form.chave_pix && form.chave_pix_tipo) {
-          await logClientEvent({
-            client_id: client.id,
-            ...historyEvent.pixAtualizado(form.chave_pix_tipo, form.chave_pix),
-          });
-        }
-
-        if (amostra) {
-          if (form.amostra_enviada && !client.amostra_enviada) {
-            // Marcou como enviada agora
-            await logClientEvent({
-              client_id: client.id,
-              ...historyEvent.amostraEnviada(form.codigo_rastreio || undefined),
-            });
-          } else {
-            // Atualizou dados da amostra
-            await logClientEvent({
-              client_id: client.id,
-              ...historyEvent.amostraAtualizada(form.amostra_observacao || undefined),
-            });
-          }
-        }
-
+        await logActivity({ action: 'update', module: 'creators', entityId: client.id, entityName: form.name, details: { fields: Object.keys(payload) } });
       } else {
-        // ── MODO CRIAÇÃO ─────────────────────────────────────────────────────
-        const { error, data: newData } = await supabase
-          .from('clients').insert([payload]).select('id').single();
+        const { error, data: newData } = await supabase.from('clients').insert([payload]).select('id').single();
         if (error) throw error;
-
         sendNotification('Novo Creator Adicionado! 🎉', { body: `${form.name} foi cadastrado com sucesso.` });
-        await logActivity({
-          action: 'create', module: 'creators',
-          entityId: newData?.id, entityName: form.name,
-        });
-
-        // ── Registrar cadastro no histórico ───────────────────────────────────
-        await logClientEvent({
-          client_id: newData!.id,
-          ...historyEvent.cadastro(form.name),
-        });
-
-        // Se já veio com PIX preenchido
-        if (form.chave_pix && form.chave_pix_tipo) {
-          await logClientEvent({
-            client_id: newData!.id,
-            ...historyEvent.pixAtualizado(form.chave_pix_tipo, form.chave_pix),
-          });
-        }
-
-        // Se já veio com amostra marcada
-        if (form.amostra_enviada) {
-          await logClientEvent({
-            client_id: newData!.id,
-            ...historyEvent.amostraEnviada(form.codigo_rastreio || undefined),
-          });
-        }
+        await logActivity({ action: 'create', module: 'creators', entityId: newData?.id, entityName: form.name });
       }
-
       onSave({});
       onClose();
     } catch (error) {
@@ -466,17 +314,11 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
   const labelClass = 'block text-xs font-medium text-gray-500 mb-1.5';
   const errorClass = 'text-[11px] text-rose-500 mt-1';
 
-  const platformIcon: Record<string, string> = {
-    TikTok: 'ri-tiktok-line',
-    Instagram: 'ri-instagram-line',
-    YouTube: 'ri-youtube-line',
-    Kwai: 'ri-play-circle-line',
-    Facebook: 'ri-facebook-circle-line',
-    'Twitter/X': 'ri-twitter-x-line',
-    Twitch: 'ri-twitch-line',
-    Pinterest: 'ri-pinterest-line',
-    LinkedIn: 'ri-linkedin-box-line',
-    Outro: 'ri-global-line',
+  // Ícone da plataforma selecionada
+  // Ícone da plataforma — usa dados do banco ou fallback
+  const getPlatformIcon = (name: string): string => {
+    const found = plataformas.find(p => p.name === name);
+    return found?.icon || 'ri-global-line';
   };
 
   const periodTabs = (value: '7' | '14' | '28' | '30', onChange: (v: '7' | '14' | '28' | '30') => void) => (
@@ -513,6 +355,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         {/* ── TAB: Dados do Creator ── */}
         {activeTab === 'obrigatorio' && (
           <div className="space-y-4">
+            {/* Nome + Telefone */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Nome <span className="text-rose-500">*</span></label>
@@ -535,6 +378,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
+            {/* CPF/CNPJ */}
             <div>
               <label className={labelClass}>CPF / CNPJ</label>
               <div className="relative">
@@ -551,16 +395,18 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               {errors.cpf_cnpj && <p className={errorClass}>{errors.cpf_cnpj}</p>}
             </div>
 
+            {/* ── PLATAFORMAS ── */}
             <div className="bg-gradient-to-r from-[#004aad]/5 to-[#5de0e6]/5 border border-[#5de0e6]/30 rounded-xl p-4 space-y-4">
               <div className="flex items-center gap-2 mb-1">
                 <i className="ri-broadcast-line text-[#004aad] text-base"></i>
                 <span className="text-xs font-semibold text-gray-800">Plataformas e Canais</span>
               </div>
 
+              {/* Categoria */}
               <div>
                 <label className={labelClass}>Categoria <span className="text-rose-500">*</span></label>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {CATEGORIAS.map((cat) => (
+                  {categorias.map((cat) => (
                     <button key={cat} type="button" onClick={() => setForm({ ...form, category: cat })}
                       className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all cursor-pointer whitespace-nowrap ${
                         form.category === cat
@@ -573,18 +419,47 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 </div>
               </div>
 
+              {/* Fonte de Captura */}
+              {fontes.length > 0 && (
+                <div>
+                  <label className={labelClass}>Fonte de Captura</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button type="button" onClick={() => setForm({ ...form, capture_source: '' })}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all cursor-pointer whitespace-nowrap ${
+                        !form.capture_source
+                          ? 'border-[#004aad] bg-[#004aad] text-white shadow-sm'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-[#004aad]/40'
+                      }`}>
+                      Não informado
+                    </button>
+                    {fontes.map(fonte => (
+                      <button key={fonte} type="button" onClick={() => setForm({ ...form, capture_source: fonte })}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all cursor-pointer whitespace-nowrap ${
+                          form.capture_source === fonte
+                            ? 'border-[#004aad] bg-[#004aad] text-white shadow-sm'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-[#004aad]/40'
+                        }`}>
+                        {fonte}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Plataforma Principal */}
               <div>
                 <label className={labelClass}>Plataforma Principal <span className="text-rose-500">*</span></label>
                 <div className="relative">
-                  <i className={`${platformIcon[form.platform] || 'ri-global-line'} absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm`}></i>
+                  <i className={`${getPlatformIcon(form.platform)} absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm`}></i>
                   <select value={form.platform}
                     onChange={e => setForm({ ...form, platform: e.target.value })}
                     className={`${inputClass} pl-9 cursor-pointer`}>
-                    {PLATAFORMAS.map(p => <option key={p} value={p}>{p}</option>)}
+                    {plataformas.map(p => p.name).map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
               </div>
 
+              {/* Links TikTok */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className={`${labelClass} mb-0 flex items-center gap-1.5`}>
@@ -620,6 +495,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 </div>
               </div>
 
+              {/* Instagram */}
               <div>
                 <label className={`${labelClass} flex items-center gap-1.5`}>
                   <i className="ri-instagram-line text-pink-500 text-xs"></i>
@@ -634,6 +510,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 </div>
               </div>
 
+              {/* YouTube */}
               <div>
                 <label className={`${labelClass} flex items-center gap-1.5`}>
                   <i className="ri-youtube-line text-red-500 text-xs"></i>
@@ -649,42 +526,8 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
-            {/* ── Fonte de Captura (obrigatório) ── */}
-            <div>
-              <label className={labelClass}>
-                Fonte de Captura <span className="text-rose-500">*</span>
-              </label>
-              <div className="relative">
-                <i className="ri-focus-3-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                <select value={form.capture_source}
-                  onChange={e => setForm({ ...form, capture_source: e.target.value })}
-                  className={`${inputClass} pl-9 cursor-pointer ${errors.capture_source ? 'border-rose-300' : ''}`}>
-                  <option value="">Selecione a fonte...</option>
-                  <option value="Hunter">Hunter</option>
-                  <option value="Campanha">Campanha</option>
-                  <option value="Formulario">Formulário</option>
-                  <option value="Indicacao">Indicação</option>
-                  <option value="Facebook">Facebook</option>
-                  <option value="Live">Live</option>
-                  <option value="Instagram">Instagram</option>
-                  <option value="WhatsApp">WhatsApp</option>
-                  <option value="Outro">Outro</option>
-                </select>
-              </div>
-              {errors.capture_source && <p className={errorClass}>{errors.capture_source}</p>}
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className={labelClass}>Seguidores</label>
-                <div className="relative">
-                  <i className="ri-user-follow-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                  <input type="number" min="0" value={form.followers}
-                    onChange={e => setForm({ ...form, followers: e.target.value })}
-                    placeholder="0"
-                    className={`${inputClass} pl-9`} />
-                </div>
-              </div>
+            {/* GMV + Status */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>GMV Geral</label>
                 <div className="relative">
@@ -707,6 +550,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
+            {/* Produtos */}
             <div>
               <label className={labelClass}>Produtos Divulgados</label>
               <textarea value={form.produtos_divulgados}
@@ -722,6 +566,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         {/* ── TAB: Endereço / PIX / Amostra ── */}
         {activeTab === 'endereco' && (
           <div className="space-y-5">
+            {/* Endereço */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-map-pin-line text-rose-500"></i>Endereço Completo
@@ -793,6 +638,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
+            {/* PIX */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-bank-card-line text-emerald-500"></i>Chave PIX
@@ -820,6 +666,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
+            {/* Amostra */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-gift-line text-amber-500"></i>Amostra de Produto
@@ -879,6 +726,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
+            {/* Comissão */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-percent-line text-brand-500"></i>Comissão Acordada
@@ -905,6 +753,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
+            {/* GMV */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-money-dollar-circle-line text-emerald-500"></i>GMV Interno
@@ -919,6 +768,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
               </div>
             </div>
 
+            {/* WhatsApp */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-whatsapp-line text-emerald-500"></i>Link do Grupo WhatsApp
@@ -928,6 +778,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 placeholder="https://chat.whatsapp.com/..." className={inputClass} />
             </div>
 
+            {/* Vídeos */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-video-line text-brand-500"></i>Vídeos Feitos
@@ -939,6 +790,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
                 placeholder="0" className={inputClass} />
             </div>
 
+            {/* Lives */}
             <div>
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <i className="ri-live-line text-rose-500"></i>Lives Feitas

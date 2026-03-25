@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import Modal from '../../../components/base/Modal';
@@ -54,16 +53,9 @@ const statusOptions = [
   { value: 'returned', label: 'Devolvido' },
 ];
 
-const carrierOptions = [
-  'Correios',
-  'Jadlog',
-  'Loggi',
-  'Total Express',
-  'Azul Cargo',
-  'Latam Cargo',
-  'Transportadora Própria',
-  'Motoboy',
-  'Outro',
+const CARRIER_FALLBACK = [
+  'Correios', 'Jadlog', 'Loggi', 'Total Express',
+  'Azul Cargo', 'Latam Cargo', 'Transportadora Própria', 'Motoboy', 'Outro',
 ];
 
 export default function LogisticsFormModal({ isOpen, onClose, onSave, editingItem }: LogisticsFormModalProps) {
@@ -89,6 +81,14 @@ export default function LogisticsFormModal({ isOpen, onClose, onSave, editingIte
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [carrierOptions, setCarrierOptions] = useState<string[]>(CARRIER_FALLBACK);
+
+  useEffect(() => {
+    supabase.from('carriers').select('name, tracking_url').eq('is_active', true).order('sort_order')
+      .then(({ data }) => {
+        if (data && data.length > 0) setCarrierOptions(data.map(c => c.name));
+      });
+  }, []);
 
   useEffect(() => {
     if (isOpen) {

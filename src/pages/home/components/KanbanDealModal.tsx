@@ -68,6 +68,14 @@ export default function KanbanDealModal({
   const [newClientName, setNewClientName] = useState('');
   const [isSendFormModalOpen, setIsSendFormModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    supabase.from('creator_categories').select('id, name').eq('is_active', true).order('sort_order')
+      .then(({ data }) => {
+        if (data && data.length > 0) setCategories(data);
+      });
+  }, []);
 
   useEffect(() => {
     if (deal) {
@@ -211,16 +219,6 @@ export default function KanbanDealModal({
       alert('Erro ao adicionar cliente');
     }
   };
-
-  const categories = [
-    { id: '1', name: 'Hunter Lucas' },
-    { id: '2', name: 'Hunter Cesar' },
-    { id: '3', name: 'Hunter Felipe' },
-    { id: '15', name: 'Cosméticos' },
-    { id: '16', name: 'Top creators' },
-    { id: '24', name: 'TESTOMEGA' },
-    { id: '25', name: 'Treinadores' },
-  ];
 
   return (
     <>
