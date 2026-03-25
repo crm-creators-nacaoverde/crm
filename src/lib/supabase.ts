@@ -24,10 +24,11 @@ export interface UserProfile {
     metrics: { view: boolean };
     settings: { view: boolean; edit: boolean };
     users: { view: boolean; edit: boolean };
+    bible: { view: boolean; edit: boolean };
+    whatsapp: { view: boolean; edit: boolean };
   };
   avatar_url?: string;
   is_active: boolean;
-  allowed_funnels: string[] | null; // null = acesso irrestrito; [] ou [ids] = restrito
   created_at: string;
   updated_at: string;
 }

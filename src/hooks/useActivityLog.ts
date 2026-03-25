@@ -2,7 +2,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
 export type LogAction = 'create' | 'update' | 'delete';
-export type LogModule = 'creators' | 'deals' | 'interactions' | 'forms' | 'users' | 'settings' | 'funnels' | 'logistics' | 'tasks' | 'financeiro' | 'metrics' | 'imports';
+export type LogModule = 'creators' | 'deals' | 'interactions' | 'forms' | 'users' | 'settings' | 'funnels' | 'logistics' | 'tasks' | 'financeiro' | 'metrics' | 'imports' | 'bible';
 
 interface LogActivityParams {
   action: LogAction;
