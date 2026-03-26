@@ -50,7 +50,7 @@ export interface WaConfig {
 
 // ─── Hook principal ───────────────────────────────────────────────────────────
 export function useWhatsApp() {
-  const { profile, user } = useAuth();
+  const { profile } = useAuth();
   const [conversations, setConversations] = useState<WaConversation[]>([]);
   const [messages, setMessages] = useState<WaMessage[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -201,7 +201,6 @@ export function useWhatsApp() {
       updated_at: new Date().toISOString(),
     }).eq('id', convId);
 
-    // Criar deal se tiver funil + creator vinculado
     const conv = conversations.find(c => c.id === convId);
     if (conv?.client_id && funnelId && stageId) {
       await supabase.from('deals').insert({
@@ -218,7 +217,6 @@ export function useWhatsApp() {
         updated_at: new Date().toISOString(),
       });
 
-      // Registrar interação
       await supabase.from('interactions').insert({
         client_id: conv.client_id,
         type: 'whatsapp',
@@ -279,6 +277,7 @@ export function useWhatsApp() {
 export function useWaConfig() {
   const [config, setConfig] = useState<WaConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  const configChannelRef = useRef<any>(null);
 
   const loadConfig = useCallback(async () => {
     const { data } = await supabase.from('wa_config').select('*').limit(1).single();
@@ -288,16 +287,32 @@ export function useWaConfig() {
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
+  // ── Realtime: atualiza config automaticamente (is_connected, qr_code) ────
+  useEffect(() => {
+    configChannelRef.current?.unsubscribe();
+    configChannelRef.current = supabase
+      .channel('wa_config_live')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'wa_config' },
+        (payload) => {
+          // Atualiza o config local diretamente sem precisar recarregar
+          setConfig(prev => prev ? { ...prev, ...payload.new as WaConfig } : payload.new as WaConfig);
+        }
+      )
+      .subscribe();
+    return () => { configChannelRef.current?.unsubscribe(); };
+  }, []);
+
   const saveConfig = async (updates: Partial<WaConfig>) => {
     if (!config?.id) return;
     await supabase.from('wa_config').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', config.id);
     await loadConfig();
   };
 
+  // ── Gerar QR Code — via Edge Function (evita CORS) ───────────────────────
   const fetchQrCode = async (): Promise<string | null> => {
     if (!config?.api_url || !config?.api_key || !config?.instance_name) return null;
     try {
-      const r = await fetch(`${config.api_url}/instance/connect/${config.instance_name}`, {
+      const r = await fetch(`${config.api_url.replace(/\/$/, '')}/instance/connect/${config.instance_name}`, {
         headers: { apikey: config.api_key },
       });
       const data = await r.json();
@@ -307,17 +322,42 @@ export function useWaConfig() {
     } catch { return null; }
   };
 
+  // ── Verificar status — chama wa-status Edge Function ─────────────────────
+  // Usa a Edge Function para evitar CORS e atualizar o banco corretamente
   const checkConnection = async (): Promise<boolean> => {
-    if (!config?.api_url || !config?.api_key || !config?.instance_name) return false;
     try {
-      const r = await fetch(`${config.api_url}/instance/connectionState/${config.instance_name}`, {
-        headers: { apikey: config.api_key },
-      });
-      const data = await r.json();
-      const connected = data?.instance?.state === 'open';
-      await saveConfig({ is_connected: connected, qr_code: connected ? null : config.qr_code });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) return false;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/wa-status`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY,
+          },
+        }
+      );
+
+      if (!response.ok) return false;
+
+      const result = await response.json();
+      const connected = result?.is_connected === true;
+
+      // Atualiza o estado local imediatamente
+      setConfig(prev => prev ? {
+        ...prev,
+        is_connected: connected,
+        phone_number: result?.phone_number || prev.phone_number,
+      } : prev);
+
       return connected;
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   };
 
   return { config, loading, saveConfig, fetchQrCode, checkConnection, loadConfig };
