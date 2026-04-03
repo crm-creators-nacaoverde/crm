@@ -131,28 +131,30 @@ export default function PublicFormPage() {
   };
 
   const loadForm = async () => {
+    // ── FIX: usa qualquer param disponível (slug ou token) ──
+    // A rota pode ser /f/:slug ou /f/:token — o identifier é o mesmo valor.
     const identifier = slug || token;
     if (!identifier) { setError('Link inválido'); setLoading(false); return; }
 
     try {
       let data: FormTemplate | null = null;
 
-      // Tenta buscar por slug primeiro (URL amigável)
-      if (slug) {
+      // 1) Tenta buscar por slug primeiro (URL amigável como /f/embaixadores)
+      {
         const { data: bySlug, error: slugErr } = await supabase
           .from('form_templates')
-          .select('id, name, public_name, slug, description, fields, is_active, share_token, auto_funnel_id, auto_stage_id, auto_owner_id, auto_supervisor_id')
-          .eq('slug', slug)
+          .select('id, name, public_name, slug, description, fields, is_active, share_token, auto_funnel_id, auto_stage_id, auto_owner_id, auto_supervisor_id, auto_category')
+          .eq('slug', identifier)
           .maybeSingle();
         if (!slugErr && bySlug) data = bySlug;
       }
 
-      // Fallback: busca por share_token (rota /formulario/:token ou /form/:token)
-      if (!data && token) {
+      // 2) Fallback: busca por share_token (rota /formulario/:token ou /form/:token)
+      if (!data) {
         const { data: byToken, error: tokenErr } = await supabase
           .from('form_templates')
-          .select('id, name, public_name, slug, description, fields, is_active, share_token, auto_funnel_id, auto_stage_id, auto_owner_id, auto_supervisor_id')
-          .eq('share_token', token)
+          .select('id, name, public_name, slug, description, fields, is_active, share_token, auto_funnel_id, auto_stage_id, auto_owner_id, auto_supervisor_id, auto_category')
+          .eq('share_token', identifier)
           .maybeSingle();
         if (!tokenErr && byToken) data = byToken;
       }
@@ -221,9 +223,10 @@ export default function PublicFormPage() {
     let cpf = '', phone = '', name = '', email = '', tiktokChannel = '',
       enderecoCep = '', enderecoRua = '', enderecoNumero = '', enderecoComplemento = '',
       enderecoBairro = '', enderecoCidade = '', enderecoEstado = '', chavePix = '', chavePixTipo = '';
-    let platformPrincipal = ''; // preenche clients.platform
-    let instagramProfile = '';  // preenche clients.instagram_profile
-    let youtubeCanal = '';      // preenche clients.youtube_canal
+    let platformPrincipal = '';
+    let instagramProfile = '';
+    let youtubeCanal = '';
+    let dataNascimento = '';
 
     fields.forEach((field) => {
       const value = fieldResponses[field.id];
@@ -249,27 +252,96 @@ export default function PublicFormPage() {
       if (isStateField(field) && typeof value === 'string') enderecoEstado = value.trim();
       if (label.includes('pix') && label.includes('chave') && typeof value === 'string') chavePix = value.trim();
       if (label.includes('pix') && label.includes('tipo') && typeof value === 'string') chavePixTipo = value.trim();
-      // Plataforma Principal → clients.platform
-      if (label === 'plataforma principal' && typeof value === 'string' && value.trim()) {
+      // FIX: Plataforma Principal — usa .includes() para pegar "Qual sua Plataforma Principal" etc.
+      if (label.includes('plataforma principal') && typeof value === 'string' && value.trim()) {
         platformPrincipal = value.trim();
       }
+      // Data de Nascimento
+      if ((type === 'date' && (label.includes('nascimento') || label.includes('aniversário') || label.includes('aniversario'))) && typeof value === 'string') {
+        dataNascimento = value.trim();
+      }
     });
-    return { cpf, phone, name, email, tiktokChannel, enderecoCep, enderecoRua, enderecoNumero, enderecoComplemento, enderecoBairro, enderecoCidade, enderecoEstado, chavePix, chavePixTipo, platformPrincipal, instagramProfile, youtubeCanal };
+    return { cpf, phone, name, email, tiktokChannel, enderecoCep, enderecoRua, enderecoNumero, enderecoComplemento, enderecoBairro, enderecoCidade, enderecoEstado, chavePix, chavePixTipo, platformPrincipal, instagramProfile, youtubeCanal, dataNascimento };
+  };
+
+  // ── Cria deal no funil configurado (se ainda não existir para esse client+funnel) ──
+  const ensureDealInFunnel = async (clientId: string, clientName: string) => {
+    try {
+      let targetFunnelId = form?.auto_funnel_id || null;
+      let targetStageId = form?.auto_stage_id || null;
+      if (!targetFunnelId) {
+        const { data: defaultFunnel } = await supabase.from('funnels').select('id').eq('is_default', true).maybeSingle();
+        if (defaultFunnel) targetFunnelId = defaultFunnel.id;
+      }
+      if (!targetFunnelId) return;
+      if (!targetStageId) {
+        const { data: firstStage } = await supabase.from('funnel_stages').select('id').eq('funnel_id', targetFunnelId).order('sort_order', { ascending: true }).limit(1).maybeSingle();
+        if (firstStage) targetStageId = firstStage.id;
+      }
+      if (!targetStageId) return;
+
+      // Verifica se já existe deal ativo (não perdido/ganho) para esse client nesse funil
+      const { data: existingDeal } = await supabase
+        .from('deals')
+        .select('id, stage')
+        .eq('client_id', clientId)
+        .eq('funnel_id', targetFunnelId)
+        .maybeSingle();
+
+      // Se já existe deal neste funil e NÃO é won/lost, não cria duplicado
+      if (existingDeal && !existingDeal.stage.includes('_won') && !existingDeal.stage.includes('_lost')) return;
+
+      // Cria o deal (seja porque não existe, seja porque o anterior foi won/lost)
+      const formDisplayName = form?.public_name || form?.name || 'Formulário';
+      const dealTitle = clientName ? `${clientName} | ${formDisplayName}` : `Creator | ${formDisplayName}`;
+      let ownerName = '', supervisorName = '';
+      const ownerId = form?.auto_owner_id || null;
+      const supervisorId = form?.auto_supervisor_id || null;
+      if (ownerId) { const { data: ownerData } = await supabase.from('user_profiles').select('full_name').eq('id', ownerId).maybeSingle(); if (ownerData) ownerName = ownerData.full_name; }
+      if (supervisorId) { const { data: supervisorData } = await supabase.from('user_profiles').select('full_name').eq('id', supervisorId).maybeSingle(); if (supervisorData) supervisorName = supervisorData.full_name; }
+      await supabase.from('deals').insert([{
+        title: dealTitle,
+        client_id: clientId,
+        client_name: clientName || null,
+        stage: targetStageId,
+        funnel_id: targetFunnelId,
+        priority: 'medium',
+        value: 0,
+        assigned_to: ownerId || null,
+        assigned_name: ownerName || null,
+        supervisor_id: supervisorId || null,
+        supervisor_name: supervisorName || null,
+        description: 'Criado automaticamente via formulário público.',
+      }]);
+    } catch (err) {
+      console.error('Erro ao criar deal no funil:', err);
+    }
   };
 
   const findOrCreateCreator = async (fields: FormField[], fieldResponses: Record<string, any>): Promise<string | null> => {
-    const { cpf, phone, name, email, tiktokChannel, enderecoCep, enderecoRua, enderecoNumero, enderecoComplemento, enderecoBairro, enderecoCidade, enderecoEstado, chavePix, chavePixTipo, platformPrincipal, instagramProfile, youtubeCanal } = extractFieldValues(fields, fieldResponses);
+    const { cpf, phone, name, email, tiktokChannel, enderecoCep, enderecoRua, enderecoNumero, enderecoComplemento, enderecoBairro, enderecoCidade, enderecoEstado, chavePix, chavePixTipo, platformPrincipal, instagramProfile, youtubeCanal, dataNascimento } = extractFieldValues(fields, fieldResponses);
     // Precisa de nome OU cpf para criar/identificar o creator
     if (!name && !cpf) return null;
     try {
+      let existingClientId: string | null = null;
+
+      // Tenta encontrar cliente existente por CPF
       if (cpf) {
         const { data: byCpf } = await supabase.from('clients').select('id').eq('cpf_cnpj', cpf).maybeSingle();
-        if (byCpf) return byCpf.id;
-        const { data: byCpfF } = await supabase.from('clients').select('id').eq('cpf_cnpj', maskCPF(cpf)).maybeSingle();
-        if (byCpfF) return byCpfF.id;
+        if (byCpf) existingClientId = byCpf.id;
+        if (!existingClientId) {
+          const { data: byCpfF } = await supabase.from('clients').select('id').eq('cpf_cnpj', maskCPF(cpf)).maybeSingle();
+          if (byCpfF) existingClientId = byCpfF.id;
+        }
       }
-      // Deduplicação por telefone removida — telefone não é único por pessoa.
-      // Apenas CPF/CNPJ garante unicidade.
+
+      // Cliente já existe → garante deal no funil e retorna
+      if (existingClientId) {
+        await ensureDealInFunnel(existingClientId, name);
+        return existingClientId;
+      }
+
+      // Cliente novo → cria
       const formDisplayName = form?.public_name || form?.name || 'Formulário';
       const creatorName = name || `Creator | ${formDisplayName}`;
       const defaultEmail = email || `${creatorName.toLowerCase().replace(/\s+/g, '')}@creator.com`;
@@ -284,10 +356,12 @@ export default function PublicFormPage() {
         category: autoCategory,
         status: 'active',
         tiktok_links: tiktokLinksArr,
+        capture_source: 'Formulário',
       };
 
       if (phone) newClientPayload.phone = phone;
       if (cpf) newClientPayload.cpf_cnpj = cpf;
+      if (dataNascimento) newClientPayload.data_nascimento = dataNascimento;
       if (instagramProfile) newClientPayload.instagram_profile = instagramProfile;
       if (youtubeCanal) newClientPayload.youtube_canal = youtubeCanal;
       if (enderecoCep) newClientPayload.endereco_cep = enderecoCep;
@@ -303,27 +377,9 @@ export default function PublicFormPage() {
       const { data: newClient, error: clientErr } = await supabase.from('clients').insert([newClientPayload]).select('id').maybeSingle();
       if (clientErr || !newClient) return null;
 
-      let targetFunnelId = form?.auto_funnel_id || null;
-      let targetStageId = form?.auto_stage_id || null;
-      if (!targetFunnelId) {
-        const { data: defaultFunnel } = await supabase.from('funnels').select('id').eq('is_default', true).maybeSingle();
-        if (defaultFunnel) targetFunnelId = defaultFunnel.id;
-      }
-      if (targetFunnelId && !targetStageId) {
-        const { data: firstStage } = await supabase.from('funnel_stages').select('id').eq('funnel_id', targetFunnelId).order('sort_order', { ascending: true }).limit(1).maybeSingle();
-        if (firstStage) targetStageId = firstStage.id;
-      }
-      if (targetFunnelId && targetStageId) {
-        // Título: "Nome do Creator | Nome do Formulário"
-        const formDisplayName = form?.public_name || form?.name || 'Formulário';
-        const dealTitle = name ? `${name} | ${formDisplayName}` : `Creator | ${formDisplayName}`;
-        let ownerName = '', supervisorName = '';
-        const ownerId = form?.auto_owner_id || null;
-        const supervisorId = form?.auto_supervisor_id || null;
-        if (ownerId) { const { data: ownerData } = await supabase.from('user_profiles').select('full_name').eq('id', ownerId).maybeSingle(); if (ownerData) ownerName = ownerData.full_name; }
-        if (supervisorId) { const { data: supervisorData } = await supabase.from('user_profiles').select('full_name').eq('id', supervisorId).maybeSingle(); if (supervisorData) supervisorName = supervisorData.full_name; }
-        await supabase.from('deals').insert([{ title: dealTitle, client_id: newClient.id, stage: targetStageId, funnel_id: targetFunnelId, priority: 'medium', value: 0, assigned_to: ownerId || null, assigned_name: ownerName || null, supervisor_id: supervisorId || null, supervisor_name: supervisorName || null, description: 'Criado automaticamente via formulário público.' }]);
-      }
+      // Cria deal no funil configurado
+      await ensureDealInFunnel(newClient.id, creatorName);
+
       return newClient.id;
     } catch (err) {
       console.error('Erro ao buscar/criar creator:', err);
@@ -358,7 +414,7 @@ export default function PublicFormPage() {
     // Categoria vem sempre da configuração do formulário, não do preenchimento
     const categoryFromForm = form?.auto_category || 'Creators';
     const updatePayload: Record<string, any> = { category: categoryFromForm };
-    const { platformPrincipal, instagramProfile, youtubeCanal, tiktokChannel } = extractFieldValues(fields, fieldResponses);
+    const { platformPrincipal, instagramProfile, youtubeCanal, tiktokChannel, dataNascimento } = extractFieldValues(fields, fieldResponses);
 
     fields.forEach((field) => {
       const value = fieldResponses[field.id];
@@ -382,6 +438,8 @@ export default function PublicFormPage() {
 
     // Sincroniza plataforma principal → clients.platform
     if (platformPrincipal) updatePayload.platform = platformPrincipal;
+    // Sincroniza data de nascimento
+    if (dataNascimento) updatePayload.data_nascimento = dataNascimento;
     // Sincroniza canais → colunas específicas
     if (instagramProfile) updatePayload.instagram_profile = instagramProfile;
     if (youtubeCanal) updatePayload.youtube_canal = youtubeCanal;

@@ -32,7 +32,8 @@ export default function NewConversationModal({ isOpen, onClose, onStart }: Props
 
   useEffect(() => {
     if (isOpen) {
-      supabase.from('clients').select('id, name, phone').eq('is_active', true).order('name').limit(50)
+      // FIX: usar status = 'active' em vez de is_active = true
+      supabase.from('clients').select('id, name, phone').eq('status', 'active').order('name').limit(50)
         .then(({ data }) => setClients(data || []));
       supabase.from('funnels').select('id, name, color').order('created_at')
         .then(({ data }) => { setFunnels(data || []); if (data?.[0]) setSelectedFunnel(data[0].id); });
@@ -65,12 +66,13 @@ export default function NewConversationModal({ isOpen, onClose, onStart }: Props
   const handleCreateAndStart = async () => {
     if (!newName.trim() || !phone) return;
     setSaving(true);
+    // FIX: usar status: 'active' em vez de is_active: true
     const { data: newClient } = await supabase.from('clients').insert({
       name: newName.trim(),
       phone: phone,
       platform: 'TikTok',
       category: 'Creators',
-      is_active: true,
+      status: 'active',
       created_by: profile?.id,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -80,6 +82,7 @@ export default function NewConversationModal({ isOpen, onClose, onStart }: Props
       await supabase.from('deals').insert({
         title: `${newName.trim()} — WhatsApp`,
         client_id: newClient.id,
+        client_name: newName.trim(),
         stage: selectedStage,
         funnel_id: selectedFunnel,
         priority: 'medium',

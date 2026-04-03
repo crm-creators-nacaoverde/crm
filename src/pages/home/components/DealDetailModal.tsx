@@ -57,6 +57,9 @@ interface ClientFull {
   amostra_enviada: boolean;
   amostra_data_envio: string;
   amostra_observacao: string;
+  instagram_profile: string;
+  youtube_canal: string;
+  data_nascimento: string;
   created_at: string;
 }
 
@@ -255,7 +258,6 @@ function QuickPaymentForm({
       });
     }
 
-    // ── Registrar no histórico do creator ────────────────────────────────────
     await logClientEvent({
       client_id: clientId,
       ...historyEvent.pagamentoRegistrado(type, valor),
@@ -341,7 +343,6 @@ export default function DealDetailModal({
     setLoading(false);
   }, [deal?.client_id]);
 
-  // ── Histórico agora vem da tabela client_history ─────────────────────────
   const loadHistory = useCallback(async () => {
     if (!deal?.client_id) return;
     setLoadingHistory(true);
@@ -424,7 +425,6 @@ export default function DealDetailModal({
       const { error } = await supabase.from('clients').update(updatePayload).eq('id', client.id);
       if (error) throw error;
 
-      // ── Registrar no histórico do creator o que foi editado ──────────────
       if (editSection === 'contato') {
         const campos = ['Telefone', 'E-mail', 'CPF/CNPJ'].filter((_, i) => {
           const keys = ['phone', 'email', 'cpf_cnpj'];
@@ -492,8 +492,6 @@ export default function DealDetailModal({
 
       await loadClient();
       if (onClientUpdated) await onClientUpdated();
-
-      // Recarregar histórico se a aba estiver ativa
       if (activeTab === 'historico') await loadHistory();
 
       const sectionLabels: Record<string, string> = {
@@ -636,6 +634,69 @@ export default function DealDetailModal({
               <i className="ri-edit-line text-sm"></i>Editar Deal
             </button>
           </div>
+
+          {/* ══════ NOVO: Creator Info & Canais ══════ */}
+          {client && (client.category || client.platform || (client.tiktok_links && client.tiktok_links.length > 0) || client.instagram_profile || client.youtube_canal) && (
+            <div className="bg-gradient-to-r from-slate-50 to-gray-50 border border-gray-100 rounded-xl p-4 space-y-3">
+              {/* Categoria + Plataforma + Seguidores */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {client.category && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg bg-[#004aad]/10 text-[#004aad] border border-[#004aad]/15">
+                    <i className="ri-price-tag-3-line text-[11px]"></i>{client.category}
+                  </span>
+                )}
+                {client.platform && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 border border-purple-100">
+                    <i className="ri-live-line text-[11px]"></i>{client.platform}
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600">
+                  <i className="ri-group-line text-[11px]"></i>{Number(client.followers || 0).toLocaleString('pt-BR')} seguidores
+                </span>
+              </div>
+
+              {/* Links dos Canais */}
+              {((client.tiktok_links && client.tiktok_links.length > 0) || client.instagram_profile || client.youtube_canal) && (
+                <div>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Canais do Creator</p>
+                  <div className="flex flex-wrap gap-2">
+                    {client.tiktok_links && client.tiktok_links.map((link: string, i: number) => {
+                      const handle = link.replace('https://www.tiktok.com/', '').replace('https://tiktok.com/', '').split('?')[0];
+                      return (
+                        <a key={`tk-${i}`} href={link} target="_blank" rel="nofollow noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 font-medium transition-all cursor-pointer group">
+                          <i className="ri-tiktok-line text-sm text-gray-800"></i>
+                          <span className="truncate max-w-[140px]">{handle || link}</span>
+                          <i className="ri-external-link-line text-[10px] text-gray-300 group-hover:text-gray-500"></i>
+                        </a>
+                      );
+                    })}
+                    {client.instagram_profile && (
+                      <a href={client.instagram_profile} target="_blank" rel="nofollow noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-pink-50 border border-gray-200 hover:border-pink-200 rounded-lg text-xs text-gray-700 font-medium transition-all cursor-pointer group">
+                        <i className="ri-instagram-line text-sm text-pink-600"></i>
+                        <span className="truncate max-w-[140px]">
+                          {client.instagram_profile.replace('https://www.instagram.com/', '').replace('https://instagram.com/', '').split('?')[0]}
+                        </span>
+                        <i className="ri-external-link-line text-[10px] text-gray-300 group-hover:text-pink-400"></i>
+                      </a>
+                    )}
+                    {client.youtube_canal && (
+                      <a href={client.youtube_canal} target="_blank" rel="nofollow noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-lg text-xs text-gray-700 font-medium transition-all cursor-pointer group">
+                        <i className="ri-youtube-line text-sm text-red-600"></i>
+                        <span className="truncate max-w-[140px]">
+                          {client.youtube_canal.replace('https://www.youtube.com/', '').replace('https://youtube.com/', '').split('?')[0]}
+                        </span>
+                        <i className="ri-external-link-line text-[10px] text-gray-300 group-hover:text-red-400"></i>
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {/* ══════ FIM: Creator Info & Canais ══════ */}
 
           {/* Info rápida */}
           <div className="grid grid-cols-3 gap-3">

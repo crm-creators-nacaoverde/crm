@@ -28,63 +28,52 @@ interface Props {
   editing?: PaymentFormData | null;
 }
 
-// Fallback com slugs — mesmos valores usados em TYPE_CONFIG no page.tsx e FinanceDetailModal
-const PAYMENT_TYPES_FALLBACK = [
-  { value: 'premiacao', label: 'Premiação', icon: 'ri-trophy-line',              color: 'text-amber-700 bg-amber-50 border-amber-200'   },
-  { value: 'cache',     label: 'Cachê',     icon: 'ri-money-dollar-circle-line', color: 'text-blue-700 bg-blue-50 border-blue-200'       },
-  { value: 'bonus',     label: 'Bônus',     icon: 'ri-gift-line',                color: 'text-purple-700 bg-purple-50 border-purple-200' },
-  { value: 'reembolso', label: 'Reembolso', icon: 'ri-refund-line',              color: 'text-teal-700 bg-teal-50 border-teal-200'       },
-  { value: 'outro',     label: 'Outro',     icon: 'ri-more-line',                color: 'text-gray-700 bg-gray-50 border-gray-200'       },
-];
 
-const ICONS  = ['ri-trophy-line','ri-money-dollar-circle-line','ri-gift-line','ri-refund-line','ri-more-line','ri-wallet-line','ri-bank-line'];
-const COLORS = [
-  'text-amber-700 bg-amber-50 border-amber-200',
-  'text-blue-700 bg-blue-50 border-blue-200',
-  'text-purple-700 bg-purple-50 border-purple-200',
-  'text-teal-700 bg-teal-50 border-teal-200',
-  'text-gray-700 bg-gray-50 border-gray-200',
-  'text-green-700 bg-green-50 border-green-200',
-  'text-rose-700 bg-rose-50 border-rose-200',
-];
+const PIX_TYPE_LABELS: Record<string, string> = {
+  cpf: 'CPF', cnpj: 'CNPJ', email: 'E-mail', telefone: 'Telefone', aleatoria: 'Aleatória',
+};
 
 export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: Props) {
   const { user } = useAuth();
   const { logActivity } = useActivityLog();
-  const [paymentTypes, setPaymentTypes] = useState(PAYMENT_TYPES_FALLBACK);
-  const [clients, setClients]           = useState<ClientOption[]>([]);
+  const [paymentTypes, setPaymentTypes] = useState<{ value: string; label: string; icon: string; color: string }[]>(PAYMENT_TYPES_FALLBACK);
+  const [clients, setClients] = useState<ClientOption[]>([]);
   const [clientSearch, setClientSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-  const [uploading, setUploading]       = useState(false);
-  const [saving, setSaving]             = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<{ url: string; name: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const emptyForm: PaymentFormData = {
-    client_id: '', client_name: '', type: 'premiacao', amount: '',
+    client_id: '', client_name: '', type: paymentTypes[0]?.value || '', amount: '',
     status: 'pendente', pix_key: '', pix_key_type: 'cpf',
     notes: '', due_date: '', paid_at: '',
   };
-  const [form, setForm]     = useState<PaymentFormData>(emptyForm);
+  const [form, setForm] = useState<PaymentFormData>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Busca tipos do banco usando slug como value — compatível com TYPE_CONFIG
   useEffect(() => {
-    supabase
-      .from('payment_types')
-      .select('slug, name')
-      .eq('is_active', true)
-      .order('sort_order')
+    supabase.from('payment_types').select('id, name').eq('is_active', true).order('sort_order')
       .then(({ data }) => {
         if (data && data.length > 0) {
+          const icons = ['ri-trophy-line','ri-money-dollar-circle-line','ri-gift-line','ri-refund-line','ri-more-line','ri-wallet-line','ri-bank-line'];
+          const colors = [
+            'text-amber-700 bg-amber-50 border-amber-200',
+            'text-blue-700 bg-blue-50 border-blue-200',
+            'text-purple-700 bg-purple-50 border-purple-200',
+            'text-teal-700 bg-teal-50 border-teal-200',
+            'text-gray-700 bg-gray-50 border-gray-200',
+            'text-green-700 bg-green-50 border-green-200',
+            'text-rose-700 bg-rose-50 border-rose-200',
+          ];
           setPaymentTypes(data.map((p, i) => ({
-            value: p.slug || p.name.toLowerCase().replace(/\s+/g, '_'),
+            value: p.id,
             label: p.name,
-            icon:  ICONS[i % ICONS.length],
-            color: COLORS[i % COLORS.length],
+            icon: icons[i % icons.length],
+            color: colors[i % colors.length],
           })));
         }
-        // Se vazio, mantém PAYMENT_TYPES_FALLBACK
       });
   }, []);
 
@@ -97,7 +86,7 @@ export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: 
         if (editing.receipt_url) setUploadedFile({ url: editing.receipt_url, name: editing.receipt_name || 'Comprovante' });
         else setUploadedFile(null);
       } else {
-        setForm({ ...emptyForm, type: paymentTypes[0]?.value || 'premiacao' });
+        setForm(emptyForm);
         setClientSearch('');
         setUploadedFile(null);
         setErrors({});
@@ -109,6 +98,7 @@ export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: 
     const { data } = await supabase
       .from('clients')
       .select('id, name, chave_pix, chave_pix_tipo, cpf_cnpj')
+      .eq('is_active', true)
       .order('name');
     setClients(data || []);
   };
@@ -116,9 +106,9 @@ export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: 
   const selectClient = (c: ClientOption) => {
     setForm(prev => ({
       ...prev,
-      client_id:    c.id,
-      client_name:  c.name,
-      pix_key:      c.chave_pix || '',
+      client_id: c.id,
+      client_name: c.name,
+      pix_key: c.chave_pix || '',
       pix_key_type: c.chave_pix_tipo || 'cpf',
     }));
     setClientSearch(c.name);
@@ -132,7 +122,7 @@ export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: 
     if (file.size > 10 * 1024 * 1024) { setErrors(e => ({ ...e, receipt: 'Arquivo muito grande. Máx. 10 MB.' })); return; }
     setUploading(true);
     setErrors(e => ({ ...e, receipt: '' }));
-    const ext  = file.name.split('.').pop();
+    const ext = file.name.split('.').pop();
     const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const { data, error } = await supabase.storage.from('receipts').upload(path, file, { contentType: file.type });
     setUploading(false);
@@ -153,31 +143,26 @@ export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: 
     if (!validate()) return;
     setSaving(true);
     const payload = {
-      client_id:    form.client_id,
-      client_name:  form.client_name,
-      type:         form.type,
-      amount:       parseFloat(form.amount),
-      status:       form.status,
-      pix_key:      form.pix_key || null,
+      client_id: form.client_id,
+      client_name: form.client_name,
+      type: form.type,
+      amount: parseFloat(form.amount),
+      status: form.status,
+      pix_key: form.pix_key || null,
       pix_key_type: form.pix_key_type || null,
-      receipt_url:  uploadedFile?.url || null,
+      receipt_url: uploadedFile?.url || null,
       receipt_name: uploadedFile?.name || null,
-      notes:        form.notes || null,
-      due_date:     form.due_date || null,
-      paid_at:      form.status === 'pago'
-        ? (form.paid_at ? new Date(form.paid_at).toISOString() : new Date().toISOString())
-        : null,
-      updated_by:  user?.id || null,
-      updated_at:  new Date().toISOString(),
+      notes: form.notes || null,
+      due_date: form.due_date || null,
+      paid_at: form.status === 'pago' ? (form.paid_at ? new Date(form.paid_at).toISOString() : new Date().toISOString()) : null,
+      updated_by: user?.id || null,
+      updated_at: new Date().toISOString(),
     };
     if (editing?.id) {
       await supabase.from('creator_payments').update(payload).eq('id', editing.id);
       await logActivity({ action: 'update', module: 'financeiro', entityId: editing.id, entityName: form.client_name, details: { type: form.type, amount: parseFloat(form.amount), status: form.status } });
     } else {
-      const { data: newPay } = await supabase
-        .from('creator_payments')
-        .insert({ ...payload, created_by: user?.id || null, created_by_name: user?.email || '' })
-        .select('id').single();
+      const { data: newPay } = await supabase.from('creator_payments').insert({ ...payload, created_by: user?.id || null, created_by_name: user?.email || '' }).select('id').single();
       await logActivity({ action: 'create', module: 'financeiro', entityId: newPay?.id, entityName: form.client_name, details: { type: form.type, amount: parseFloat(form.amount) } });
     }
     setSaving(false);
@@ -185,11 +170,8 @@ export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: 
     onClose();
   };
 
-  const filteredClients = clients.filter(c =>
-    c.name.toLowerCase().includes(clientSearch.toLowerCase())
-  );
-
-  const inp       = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] bg-white transition-all';
+  const filteredClients = clients.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()));
+  const inp = 'w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] bg-white transition-all';
   const isEditing = !!editing?.id;
 
   if (!isOpen) return null;
@@ -221,19 +203,12 @@ export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: 
             </label>
             <div className="relative">
               <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-              <input
-                type="text"
-                value={clientSearch}
-                onChange={e => {
-                  setClientSearch(e.target.value);
-                  setShowDropdown(true);
-                  if (!e.target.value) setForm(f => ({ ...f, client_id: '', client_name: '' }));
-                }}
+              <input type="text" value={clientSearch}
+                onChange={e => { setClientSearch(e.target.value); setShowDropdown(true); if (!e.target.value) setForm(f => ({ ...f, client_id: '', client_name: '' })); }}
                 onFocus={() => setShowDropdown(true)}
                 disabled={isEditing}
                 placeholder="Buscar creator..."
-                className={`${inp} pl-9 ${errors.client ? 'border-rose-400' : ''} ${isEditing ? 'bg-gray-50 cursor-default' : ''}`}
-              />
+                className={`${inp} pl-9 ${errors.client ? 'border-rose-400' : ''} ${isEditing ? 'bg-gray-50 cursor-default' : ''}`} />
             </div>
             {errors.client && <p className="text-xs text-rose-600 mt-1">{errors.client}</p>}
             {showDropdown && !isEditing && clientSearch && (
@@ -302,10 +277,8 @@ export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: 
               </div>
               <div className="grid grid-cols-5 gap-1.5">
                 {[
-                  { value: 'cpf',       label: 'CPF'    },
-                  { value: 'cnpj',      label: 'CNPJ'   },
-                  { value: 'email',     label: 'E-mail' },
-                  { value: 'telefone',  label: 'Tel.'   },
+                  { value: 'cpf', label: 'CPF' }, { value: 'cnpj', label: 'CNPJ' },
+                  { value: 'email', label: 'E-mail' }, { value: 'telefone', label: 'Tel.' },
                   { value: 'aleatoria', label: 'Aleat.' },
                 ].map(t => (
                   <button key={t.value} type="button" onClick={() => setForm(f => ({ ...f, pix_key_type: t.value }))}
