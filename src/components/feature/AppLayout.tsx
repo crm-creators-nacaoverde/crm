@@ -5,16 +5,9 @@ import { useSampleAlerts } from '../../hooks/useSampleAlerts';
 import { CadastrosProvider } from '../../contexts/CadastrosContext';
 import NotificationPanel from './NotificationPanel';
 import SystemTour from './SystemTour';
-import { supabase } from '../../lib/supabase';
 
 interface AppLayoutProps {
   children: React.ReactNode;
-}
-
-interface CompanySettings {
-  name: string;
-  logo_base64: string;
-  logo_url: string;
 }
 
 export default function AppLayout({ children }: AppLayoutProps) {
@@ -22,7 +15,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const { user, profile, loading, signOut, hasPermission } = useAuth();
@@ -53,30 +45,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // 🔥 Busca nome E logo da empresa do banco
-  useEffect(() => {
-    supabase
-      .from('company_settings')
-      .select('name, logo_base64, logo_url')
-      .single()
-      .then(({ data }) => {
-        if (data) setCompanySettings(data);
-      });
-  }, []);
-
-  // Logo resolvido: prioriza base64, depois url, depois null (exibe imagem padrão)
-  const resolvedLogo = companySettings?.logo_base64 || companySettings?.logo_url || null;
-
   const menuItems = [
-    { id: 'metrics',      label: 'Métricas',        icon: 'ri-line-chart-line',          path: '/',               permission: 'metrics' },
-    { id: 'clients',      label: 'Creators',         icon: 'ri-user-star-line',           path: '/creators',       permission: 'clients' },
-    { id: 'kanban',       label: 'Acompanhamento',   icon: 'ri-kanban-view',              path: '/acompanhamento', permission: 'deals' },
-    { id: 'interactions', label: 'Interações',       icon: 'ri-chat-3-line',              path: '/interacoes',     permission: 'interactions' },
-    { id: 'logistica',    label: 'Logística',        icon: 'ri-truck-line',               path: '/logistica',      permission: 'logistica' },
-    { id: 'financeiro',   label: 'Financeiro',       icon: 'ri-money-dollar-circle-line', path: '/financeiro',     permission: 'financeiro' },
-    { id: 'biblia',       label: 'Bíblia Comercial', icon: 'ri-book-open-line',           path: '/biblia',         permission: 'bible' },
-    { id: 'whatsapp',     label: 'WhatsApp',         icon: 'ri-whatsapp-line',            path: '/whatsapp',       permission: 'whatsapp' },
-    { id: 'settings',     label: 'Configurações',    icon: 'ri-settings-3-line',          path: '/configuracoes',  permission: 'settings' },
+    { id: 'metrics',     label: 'Métricas',       icon: 'ri-line-chart-line',          path: '/',               permission: 'metrics' },
+    { id: 'clients',     label: 'Creators',        icon: 'ri-user-star-line',           path: '/creators',       permission: 'clients' },
+    { id: 'kanban',      label: 'Acompanhamento',  icon: 'ri-kanban-view',              path: '/acompanhamento', permission: 'deals' },
+    { id: 'interactions',label: 'Interações',      icon: 'ri-chat-3-line',              path: '/interacoes',     permission: 'interactions' },
+    { id: 'logistica',   label: 'Logística',       icon: 'ri-truck-line',               path: '/logistica',      permission: 'logistica' },
+    { id: 'financeiro',  label: 'Financeiro',      icon: 'ri-money-dollar-circle-line', path: '/financeiro',     permission: 'financeiro' },
+    { id: 'biblia',      label: 'Bíblia Comercial', icon: 'ri-book-open-line',           path: '/biblia',         permission: 'bible' },
+    { id: 'whatsapp',    label: 'WhatsApp',         icon: 'ri-whatsapp-line',            path: '/whatsapp',       permission: 'whatsapp' },
+    { id: 'settings',    label: 'Configurações',   icon: 'ri-settings-3-line',          path: '/configuracoes',  permission: 'settings' },
   ];
 
   const isActive = (item: typeof menuItems[0]) => {
@@ -111,8 +89,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
       '/interacoes':    'Histórico de comunicações',
       '/logistica':     'Controle de envios e rastreamento',
       '/financeiro':    'Pagamentos e histórico financeiro',
-      '/biblia':        'Treinamento e desenvolvimento',
-      '/whatsapp':      'Central de atendimento WhatsApp',
+      '/biblia':         'Treinamento e desenvolvimento',
+      '/whatsapp':       'Central de atendimento WhatsApp',
       '/formularios':   'Crie e gerencie formulários para creators',
       '/webhooks':      'Receba leads automaticamente de fontes externas',
       '/configuracoes': 'Preferências do sistema',
@@ -187,8 +165,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
     );
   }
 
-  const mainMenuItems   = menuItems.filter(item => !['settings'].includes(item.id));
-  const bottomMenuItems = menuItems.filter(item =>  ['settings'].includes(item.id));
+  const mainMenuItems  = menuItems.filter(item => !['settings'].includes(item.id));
+  const bottomMenuItems = menuItems.filter(item => ['settings'].includes(item.id));
 
   return (
     <CadastrosProvider>
@@ -210,20 +188,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
         {/* Logo area */}
         <div className={`h-[64px] flex items-center border-b border-gray-50 ${sidebarCollapsed ? 'px-3 justify-center' : 'px-5'}`}>
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 min-w-[36px] rounded-xl flex items-center justify-center overflow-hidden">
-              {/* 🔥 Logo dinâmico: usa logo da empresa ou fallback para imagem padrão */}
+            <div className="w-9 h-9 min-w-[36px] rounded-xl flex items-center justify-center">
               <img
-                src={resolvedLogo || 'https://static.readdy.ai/image/70e45d590e9f98e53f87ef3694a62a6d/0c4980ef84e25e6962183ed0f1e9a202.png'}
-                alt={companySettings?.name || 'Logo'}
+                src="https://static.readdy.ai/image/70e45d590e9f98e53f87ef3694a62a6d/0c4980ef84e25e6962183ed0f1e9a202.png"
+                alt="Creator Milionário"
                 className="w-full h-full object-contain"
               />
             </div>
             {!sidebarCollapsed && (
               <div className="min-w-0">
-                {/* 🔥 Nome dinâmico da empresa */}
-                <h1 className="text-[15px] font-bold text-gray-900 truncate leading-tight">
-                  {companySettings?.name || 'CRM Creators'}
-                </h1>
+                <h1 className="text-[15px] font-bold text-gray-900 truncate leading-tight">CRM Creators</h1>
                 <p className="text-[10px] text-gray-400 leading-tight mt-0.5">Gestão de Influenciadores</p>
               </div>
             )}

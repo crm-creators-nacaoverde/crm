@@ -48,9 +48,20 @@ export interface WaConfig {
   phone_number: string | null;
 }
 
+// ─── Helper: garante https:// na URL ──────────────────────────────────────────
+const ensureProtocol = (url: string): string => {
+  if (!url) return url;
+  url = url.trim().replace(/\/+$/, '');
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `https://${url}`;
+};
+
+// ─── URL do webhook outbound (n8n) ────────────────────────────────────────────
+const N8N_OUTBOUND_URL = 'https://n8n.metodoia.com.br/webhook/wa-enviar';
+
 // ─── Hook principal ───────────────────────────────────────────────────────────
 export function useWhatsApp() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [conversations, setConversations] = useState<WaConversation[]>([]);
   const [messages, setMessages] = useState<WaMessage[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -141,29 +152,41 @@ export function useWhatsApp() {
 
   const activeConversation = conversations.find(c => c.id === activeConvId) || null;
 
-  // ── Enviar mensagem ───────────────────────────────────────────────────────
+  // ── Enviar mensagem (via n8n outbound webhook) ────────────────────────────
   const sendMessage = useCallback(async (text: string): Promise<boolean> => {
     if (!activeConvId || !text.trim()) return false;
+
+    // Buscar remote_jid: tenta state local primeiro, senão vai direto no banco
+    let remoteJid = conversations.find(c => c.id === activeConvId)?.remote_jid;
+
+    if (!remoteJid) {
+      const { data } = await supabase
+        .from('wa_conversations')
+        .select('remote_jid')
+        .eq('id', activeConvId)
+        .single();
+      remoteJid = data?.remote_jid;
+    }
+
+    if (!remoteJid) return false;
+
     setSending(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      const response = await fetch(
-        `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/wa-send`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'apikey': import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ conversation_id: activeConvId, message: text }),
-        }
-      );
+      const response = await fetch(N8N_OUTBOUND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: activeConvId,
+          remote_jid: remoteJid,
+          body: text.trim(),
+          sent_by: user?.id || null,
+          sent_by_name: profile?.full_name || '',
+        }),
+      });
       return response.ok;
     } catch { return false; }
     finally { setSending(false); }
-  }, [activeConvId]);
+  }, [activeConvId, conversations, user?.id, profile?.full_name]);
 
   // ── Atribuir conversa ─────────────────────────────────────────────────────
   const assignConversation = useCallback(async (convId: string, userId: string, userName: string) => {
@@ -201,6 +224,7 @@ export function useWhatsApp() {
       updated_at: new Date().toISOString(),
     }).eq('id', convId);
 
+    // Criar deal se tiver funil + creator vinculado
     const conv = conversations.find(c => c.id === convId);
     if (conv?.client_id && funnelId && stageId) {
       await supabase.from('deals').insert({
@@ -217,6 +241,7 @@ export function useWhatsApp() {
         updated_at: new Date().toISOString(),
       });
 
+      // Registrar interação
       await supabase.from('interactions').insert({
         client_id: conv.client_id,
         type: 'whatsapp',
@@ -237,9 +262,27 @@ export function useWhatsApp() {
     clientId: string | null,
     clientName: string,
   ): Promise<string | null> => {
-    const jid = phone.replace(/\D/g, '') + '@s.whatsapp.net';
+    const digits = phone.replace(/\D/g, '');
+    if (!digits) return null; // Impede criação sem número
+
+    const jid = digits + '@s.whatsapp.net';
+
+    // Verifica se já existe conversa aberta/pendente para esse número
+    const { data: existing } = await supabase
+      .from('wa_conversations')
+      .select('id')
+      .eq('remote_jid', jid)
+      .in('status', ['open', 'pending'])
+      .maybeSingle();
+
+    if (existing) {
+      setActiveConvId(existing.id);
+      return existing.id;
+    }
+
     const { data } = await supabase.from('wa_conversations').insert({
       remote_jid: jid,
+      phone: digits,
       client_id: clientId,
       client_name: clientName,
       assigned_to: profile?.id,
@@ -277,7 +320,6 @@ export function useWhatsApp() {
 export function useWaConfig() {
   const [config, setConfig] = useState<WaConfig | null>(null);
   const [loading, setLoading] = useState(true);
-  const configChannelRef = useRef<any>(null);
 
   const loadConfig = useCallback(async () => {
     const { data } = await supabase.from('wa_config').select('*').limit(1).single();
@@ -287,32 +329,17 @@ export function useWaConfig() {
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
-  // ── Realtime: atualiza config automaticamente (is_connected, qr_code) ────
-  useEffect(() => {
-    configChannelRef.current?.unsubscribe();
-    configChannelRef.current = supabase
-      .channel('wa_config_live')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'wa_config' },
-        (payload) => {
-          // Atualiza o config local diretamente sem precisar recarregar
-          setConfig(prev => prev ? { ...prev, ...payload.new as WaConfig } : payload.new as WaConfig);
-        }
-      )
-      .subscribe();
-    return () => { configChannelRef.current?.unsubscribe(); };
-  }, []);
-
   const saveConfig = async (updates: Partial<WaConfig>) => {
     if (!config?.id) return;
     await supabase.from('wa_config').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', config.id);
     await loadConfig();
   };
 
-  // ── Gerar QR Code — via Edge Function (evita CORS) ───────────────────────
   const fetchQrCode = async (): Promise<string | null> => {
     if (!config?.api_url || !config?.api_key || !config?.instance_name) return null;
     try {
-      const r = await fetch(`${config.api_url.replace(/\/$/, '')}/instance/connect/${config.instance_name}`, {
+      const baseUrl = ensureProtocol(config.api_url);
+      const r = await fetch(`${baseUrl}/instance/connect/${config.instance_name}`, {
         headers: { apikey: config.api_key },
       });
       const data = await r.json();
@@ -322,42 +349,18 @@ export function useWaConfig() {
     } catch { return null; }
   };
 
-  // ── Verificar status — chama wa-status Edge Function ─────────────────────
-  // Usa a Edge Function para evitar CORS e atualizar o banco corretamente
   const checkConnection = async (): Promise<boolean> => {
+    if (!config?.api_url || !config?.api_key || !config?.instance_name) return false;
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) return false;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_PUBLIC_SUPABASE_URL}/functions/v1/wa-status`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'apikey': import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY,
-          },
-        }
-      );
-
-      if (!response.ok) return false;
-
-      const result = await response.json();
-      const connected = result?.is_connected === true;
-
-      // Atualiza o estado local imediatamente
-      setConfig(prev => prev ? {
-        ...prev,
-        is_connected: connected,
-        phone_number: result?.phone_number || prev.phone_number,
-      } : prev);
-
+      const baseUrl = ensureProtocol(config.api_url);
+      const r = await fetch(`${baseUrl}/instance/connectionState/${config.instance_name}`, {
+        headers: { apikey: config.api_key },
+      });
+      const data = await r.json();
+      const connected = data?.instance?.state === 'open';
+      await saveConfig({ is_connected: connected, qr_code: connected ? null : config.qr_code });
       return connected;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   };
 
   return { config, loading, saveConfig, fetchQrCode, checkConnection, loadConfig };
