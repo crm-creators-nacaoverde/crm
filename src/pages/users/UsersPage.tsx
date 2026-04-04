@@ -166,21 +166,17 @@ export default function UsersPage() {
       if (!token) throw new Error('Sessão expirada');
 
       const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY;
       const functionUrl = `${supabaseUrl}/functions/v1/create-user`;
       
-      console.log('[handleCreateUser] URL:', functionUrl);
-      console.log('[handleCreateUser] Token presente:', !!token);
-      console.log('[handleCreateUser] Dados:', userData);
+      console.log('[handleCreateUser] Iniciando criação de usuário:', userData.email);
+      console.log('[handleCreateUser] URL da função:', functionUrl);
 
-      const response = await fetch(
-        functionUrl,
-      {
+      const response = await fetch(functionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_PUBLIC_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
         },
         body: JSON.stringify({
           full_name: userData.full_name,
@@ -190,27 +186,25 @@ export default function UsersPage() {
           permissions: perms,
           is_active: userData.is_active,
         }),
-      }
-    );
+      });
 
-      console.log('[handleCreateUser] Response status:', response.status);
-      console.log('[handleCreateUser] Response headers:', Object.fromEntries(response.headers));
+      console.log('[handleCreateUser] Status da resposta:', response.status);
+
+      let result;
+      try {
+        result = await response.json();
+      } catch (e) {
+        console.error('[handleCreateUser] Erro ao parsear JSON:', e);
+        throw new Error(`Resposta inválida do servidor (status: ${response.status})`);
+      }
 
       if (!response.ok) {
-        let errorMsg = 'Erro ao criar usuário';
-        try {
-          const result = await response.json();
-          errorMsg = result.error || errorMsg;
-          console.error('[handleCreateUser] Erro da API:', result);
-        } catch (e) {
-          errorMsg = `Erro HTTP ${response.status}: ${response.statusText}`;
-          console.error('[handleCreateUser] Erro ao parsear resposta:', e);
-        }
+        const errorMsg = result?.error || `Erro HTTP ${response.status}`;
+        console.error('[handleCreateUser] Erro da API:', errorMsg, result);
         throw new Error(errorMsg);
       }
 
-      const result = await response.json();
-      console.log('[handleCreateUser] Sucesso:', result);
+      console.log('[handleCreateUser] Usuário criado com sucesso:', result);
 
       await logActivity({
         action: 'create',
