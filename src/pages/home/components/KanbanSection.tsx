@@ -488,6 +488,7 @@ export default function KanbanSection() {
         onToggleClosedStages={handleToggleClosedStages}
         selectedFunnelId={selectedFunnelId}
         funnels={funnels.map(f => ({ id: f.id, name: f.name, color: f.color }))}
+        currentUserId={user?.id}
         onFunnelChange={selectFunnel}
       />
 

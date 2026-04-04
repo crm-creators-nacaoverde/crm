@@ -33,6 +33,7 @@ interface KanbanToolbarProps {
   selectedFunnelId: string | null;
   funnels: Array<{ id: string; name: string; color: string }>;
   onFunnelChange: (funnelId: string) => void;
+  currentUserId?: string;
 }
 
 export default function KanbanToolbar({
@@ -67,6 +68,7 @@ export default function KanbanToolbar({
   selectedFunnelId,
   funnels,
   onFunnelChange,
+  currentUserId,
 }: KanbanToolbarProps) {
   return (
     <div className="space-y-4">
@@ -204,7 +206,7 @@ export default function KanbanToolbar({
             >
               <option value="all">Todos</option>
               <option value="mine">Minhas</option>
-              {users.map((u) => (
+              {users.filter(u => u.id !== currentUserId).map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.full_name}
                 </option>
