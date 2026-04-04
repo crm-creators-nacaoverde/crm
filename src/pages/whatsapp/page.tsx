@@ -37,9 +37,18 @@ export default function WhatsAppPage() {
         if (activeConvId !== conv.id) {
           selectConversation(conv.id);
         }
+        // Limpa o parâmetro da URL após selecionar
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('phone');
+        window.history.replaceState({}, '', `${window.location.pathname}?${newParams.toString()}`);
       } else {
         // Se não encontrar na lista atual, tenta iniciar uma nova conversa
-        startConversation(digits, null, digits);
+        startConversation(digits, null, digits).then(() => {
+          // Limpa o parâmetro da URL após iniciar
+          const newParams = new URLSearchParams(searchParams);
+          newParams.delete('phone');
+          window.history.replaceState({}, '', `${window.location.pathname}?${newParams.toString()}`);
+        });
       }
     }
   }, [searchParams, conversations, loading, activeConvId, selectConversation, startConversation]);

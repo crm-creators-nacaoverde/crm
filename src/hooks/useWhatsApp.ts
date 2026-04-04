@@ -281,12 +281,24 @@ export function useWhatsApp() {
 
     const { data: existing } = await supabase
       .from('wa_conversations')
-      .select('id')
+      .select('id, status')
       .eq('remote_jid', jid)
-      .in('status', ['open', 'pending'])
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existing) {
+      // Se a conversa já existe mas está fechada, reabre ela
+      if (existing.status === 'closed') {
+        await supabase.from('wa_conversations').update({
+          status: 'open',
+          assigned_to: profile?.id,
+          assigned_name: profile?.full_name,
+          updated_at: new Date().toISOString(),
+        }).eq('id', existing.id);
+        await loadConversations();
+      }
+      
       setActiveConvId(existing.id);
       return existing.id;
     }
