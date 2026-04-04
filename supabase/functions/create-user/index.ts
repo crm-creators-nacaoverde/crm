@@ -54,13 +54,11 @@ Deno.serve(async (req) => {
       return corsResponse({ error: "Configuração do servidor incompleta" }, 500);
     }
 
-    // Create client with user's token to verify they are admin
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // Create admin client with service role to verify user's token
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get current user
-    const { data: { user: callerUser }, error: authError } = await userClient.auth.getUser();
+    // Get current user from the provided token
+    const { data: { user: callerUser }, error: authError } = await adminClient.auth.getUser(authHeader.split(' ')[1]);
     if (authError || !callerUser) {
       console.error("[create-user] Auth error:", authError?.message);
       return corsResponse({ error: "Não autorizado - token inválido" }, 401);
@@ -69,7 +67,7 @@ Deno.serve(async (req) => {
     console.log(`[create-user] User authenticated: ${callerUser.id}`);
 
     // Check if caller is admin
-    const { data: callerProfile, error: profileError } = await userClient
+    const { data: callerProfile, error: profileError } = await adminClient
       .from("user_profiles")
       .select("role")
       .eq("id", callerUser.id)

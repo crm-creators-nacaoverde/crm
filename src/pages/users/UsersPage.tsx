@@ -163,7 +163,13 @@ export default function UsersPage() {
       const perms = getPermsForRole(userData.role);
       console.log('[handleCreateUser] Iniciando criação de usuário:', userData.email);
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
       const { data, error } = await supabase.functions.invoke('create-user', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         body: {
           full_name: userData.full_name,
           email: userData.email,
