@@ -236,7 +236,7 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
     const nameCol  = Object.entries(mapping).find(([, v]) => v === 'name')?.[0] || '';
     const phoneCol = Object.entries(mapping).find(([, v]) => v === 'phone')?.[0] || '';
     const selectedFunnel = funnels.find(f => f.id === selectedFunnelId);
-    const selectedStage  = stages.find(s => s.id === selectedStageId) || stages.find(s => s.id !== 'won' && s.id !== 'lost');
+    const selectedStage  = stages.find(s => s.id === selectedStageId) || stages.find(s => s.id !== 'won' && s.id !== 'lost' && !s.id.startsWith('won_') && !s.id.startsWith('lost_'));
 
     let imported = 0, duplicates = 0, errors = 0;
 

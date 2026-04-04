@@ -350,8 +350,10 @@ export default function KanbanSection() {
 
   const handleDrop = async (stageId: string) => {
     if (draggedDeal && draggedDeal.stage !== stageId) {
-      const isOutcome = stageId === 'won' || stageId === 'lost';
-      if (isOutcome && outcomeReasons.filter(r => r.type === stageId).length > 0) {
+      const isOutcome = stageId === 'won' || stageId === 'lost' || stageId.startsWith('won_') || stageId.startsWith('lost_');
+      const outcomeType = (stageId === 'won' || stageId.startsWith('won_')) ? 'won' : 'lost';
+      if (isOutcome && outcomeReasons.filter(r => r.type === outcomeType).length > 0) {
+        setPendingDrop({ dealId: draggedDeal.id, stageId, dealTitle: draggedDeal.title });
         setPendingDrop({ dealId: draggedDeal.id, stageId, dealTitle: draggedDeal.title });
         setSelectedReason('');
         setCustomReason('');
@@ -560,12 +562,12 @@ export default function KanbanSection() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${pendingDrop.stageId === 'won' ? 'bg-emerald-50' : 'bg-rose-50'}`}>
-                <i className={`${pendingDrop.stageId === 'won' ? 'ri-checkbox-circle-line text-emerald-600' : 'ri-close-circle-line text-rose-600'} text-lg`}></i>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${(pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_')) ? 'bg-emerald-50' : 'bg-rose-50'}`}>
+                <i className={`${(pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_')) ? 'ri-checkbox-circle-line text-emerald-600' : 'ri-close-circle-line text-rose-600'} text-lg`}></i>
               </div>
               <div>
                 <p className="text-sm font-bold text-gray-900">
-                  {pendingDrop.stageId === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+                  {(pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_')) ? 'Marcar como Ganho' : 'Marcar como Perdido'}
                 </p>
                 <p className="text-[11px] text-gray-400 truncate max-w-xs">{pendingDrop.dealTitle}</p>
               </div>
@@ -574,7 +576,7 @@ export default function KanbanSection() {
             <div className="p-5 space-y-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Motivo</p>
               <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                {outcomeReasons.filter(r => r.type === pendingDrop.stageId).map(r => (
+                {outcomeReasons.filter(r => r.type === ((pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_')) ? 'won' : 'lost')).map(r => (
                   <label key={r.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedReason === r.id ? (pendingDrop.stageId === 'won' ? 'border-emerald-400 bg-emerald-50' : 'border-rose-400 bg-rose-50') : 'border-gray-100 hover:border-gray-200'}`}>
                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedReason === r.id ? (pendingDrop.stageId === 'won' ? 'border-emerald-500 bg-emerald-500' : 'border-rose-500 bg-rose-500') : 'border-gray-300'}`}>
                       {selectedReason === r.id && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
@@ -611,23 +613,25 @@ export default function KanbanSection() {
                   const reason = selectedReason === '__outro'
                     ? customReason.trim()
                     : outcomeReasons.find(r => r.id === selectedReason)?.name || '';
-                  const deal = deals.find(d => d.id === pendingDrop.dealId) || { id: pendingDrop.dealId, title: pendingDrop.dealTitle, stage: '', funnel_id: selectedFunnelId || '', value: 0, priority: 'medium', tags: [], client_id: null, client_name: null, assigned_to: null, assigned_name: null, supervisor_id: null, supervisor_name: null, description: null, expected_close_date: null, created_at: '', updated_at: '' };
+                  
                   // Salvar motivo junto com a atualização do stage
                   await supabase.from('deals').update({
                     stage: pendingDrop.stageId,
                     outcome_reason: reason,
                     updated_at: new Date().toISOString(),
                   }).eq('id', pendingDrop.dealId);
+                  
                   await logActivity({
                     action: 'update', module: 'deals',
                     entityId: pendingDrop.dealId, entityName: pendingDrop.dealTitle,
                     details: { action: 'move_stage', to: pendingDrop.stageId, reason },
                   });
+                  
                   setPendingDrop(null); setSelectedReason(''); setCustomReason('');
                   await loadData();
                 }}
-                className={`flex-1 py-2.5 text-sm font-semibold text-white rounded-xl cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${pendingDrop.stageId === 'won' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}>
-                {pendingDrop.stageId === 'won' ? 'Confirmar Ganho' : 'Confirmar Perda'}
+                className={`flex-1 py-2.5 text-sm font-semibold text-white rounded-xl cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${(pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_')) ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}>
+                {(pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_')) ? 'Confirmar Ganho' : 'Confirmar Perda'}
               </button>
             </div>
           </div>

@@ -88,6 +88,17 @@ export default function KanbanOptionsMenu({
             <div className="my-1.5 mx-3 border-t border-gray-100"></div>
 
             <button
+              onClick={() => handleAction(onConfigureFunnel)}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+              type="button"
+            >
+              <div className="w-8 h-8 flex items-center justify-center bg-gray-50 rounded-lg">
+                <i className="ri-settings-3-line text-base text-gray-500"></i>
+              </div>
+              <span className="font-medium">Configurar Etapas</span>
+            </button>
+
+            <button
               onClick={() => handleAction(onManageFunnels)}
               className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
               type="button"
