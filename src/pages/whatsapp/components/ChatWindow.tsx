@@ -11,6 +11,7 @@ interface Props {
   onClose: () => void;
   onAssignToMe: () => void;
   onLinkCreator: () => void;
+  onTransfer: () => void;
   isAdmin: boolean;
 }
 
@@ -29,7 +30,7 @@ function formatDate(iso: string): string {
 
 export default function ChatWindow({
   conversation, messages, loadingMessages, sending,
-  currentUserId, onSend, onClose, onAssignToMe, onLinkCreator, isAdmin,
+  currentUserId, onSend, onClose, onAssignToMe, onLinkCreator, onTransfer, isAdmin,
 }: Props) {
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -99,10 +100,16 @@ export default function ChatWindow({
               <i className="ri-user-add-line text-xs"></i>Vincular Creator
             </button>
           )}
-          {!conversation.assigned_to && isAdmin && (
+          {!conversation.assigned_to && (
             <button onClick={onAssignToMe}
               className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg cursor-pointer transition-colors whitespace-nowrap">
               <i className="ri-user-received-line text-xs"></i>Assumir
+            </button>
+          )}
+          {conversation.assigned_to && (
+            <button onClick={onTransfer}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg cursor-pointer transition-colors whitespace-nowrap">
+              <i className="ri-user-shared-line text-xs"></i>Transferir
             </button>
           )}
           <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${
@@ -153,8 +160,13 @@ export default function ChatWindow({
                           <span className="text-[11px] capitalize">{msg.message_type}</span>
                         </div>
                       )}
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.body}</p>
-                      <div className={`flex items-center gap-1 mt-1 ${isOut ? 'justify-end' : 'justify-start'}`}>
+	                      {isOut && msg.sent_by_name && (
+	                        <p className="text-[10px] font-bold mb-1 opacity-80 uppercase tracking-wider">
+	                          Especialista ({msg.sent_by_name})
+	                        </p>
+	                      )}
+	                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.body}</p>
+	                      <div className={`flex items-center gap-1 mt-1 ${isOut ? 'justify-end' : 'justify-start'}`}>
                         <span className={`text-[10px] ${isOut ? 'text-emerald-100' : 'text-gray-400'}`}>
                           {formatTime(msg.created_at)}
                         </span>

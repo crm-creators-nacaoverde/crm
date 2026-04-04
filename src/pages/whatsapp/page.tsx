@@ -16,7 +16,7 @@ export default function WhatsAppPage() {
     conversations, messages, activeConvId, activeConversation,
     loading, loadingMessages, sending, filter, totalUnread, isAdmin,
     setFilter, selectConversation, sendMessage,
-    assignConversation, linkClient, closeConversation, startConversation,
+    assignConversation, transferConversation, linkClient, closeConversation, startConversation,
     loadConversations,
   } = useWhatsApp();
 
@@ -24,6 +24,7 @@ export default function WhatsAppPage() {
   const [showCloseConv, setShowCloseConv] = useState(false);
   const [showConnect, setShowConnect]     = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
 
   // Vincular creator existente à conversa
   const [linkSearch, setLinkSearch] = useState('');
@@ -49,6 +50,18 @@ export default function WhatsAppPage() {
   const handleAssignToMe = async () => {
     if (!activeConvId || !profile) return;
     await assignConversation(activeConvId, profile.id, profile.full_name);
+  };
+
+  const [allUsers, setAllUsers] = useState<{ id: string; full_name: string; role: string }[]>([]);
+  const loadAllUsers = async () => {
+    const { data } = await supabase.from('user_profiles').select('id, full_name, role').eq('is_active', true);
+    setAllUsers(data || []);
+  };
+
+  const handleTransfer = async (userId: string, userName: string) => {
+    if (!activeConvId) return;
+    await transferConversation(activeConvId, userId, userName);
+    setShowTransferModal(false);
   };
 
   const handleClose = async (
@@ -102,6 +115,7 @@ export default function WhatsAppPage() {
             onClose={() => setShowCloseConv(true)}
             onAssignToMe={handleAssignToMe}
             onLinkCreator={() => setShowLinkModal(true)}
+            onTransfer={() => { loadAllUsers(); setShowTransferModal(true); }}
             isAdmin={isAdmin}
           />
         </div>
@@ -131,6 +145,38 @@ export default function WhatsAppPage() {
         isOpen={showConnect}
         onClose={() => setShowConnect(false)}
       />
+
+      {/* Modal de transferir conversa */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <p className="text-sm font-bold text-gray-900">Transferir Conversa</p>
+              <button onClick={() => setShowTransferModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 cursor-pointer">
+                <i className="ri-close-line text-gray-500"></i>
+              </button>
+            </div>
+            <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
+              {allUsers.filter(u => u.id !== user?.id).map(u => (
+                <button key={u.id} onClick={() => handleTransfer(u.id, u.full_name)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors text-left">
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <i className="ri-user-line text-gray-400 text-sm"></i>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{u.full_name}</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">{u.role}</p>
+                  </div>
+                </button>
+              ))}
+              {allUsers.length <= 1 && (
+                <p className="text-sm text-gray-400 text-center py-4">Nenhum outro usuário disponível</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de vincular creator */}
       {showLinkModal && (
