@@ -144,7 +144,7 @@ export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
   ];
 
   return (
-    <div className="w-80 flex-shrink-0 bg-white border-l border-gray-100 flex flex-col overflow-hidden">
+    <div className="w-96 flex-shrink-0 bg-white border-l border-gray-100 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Creator</p>
