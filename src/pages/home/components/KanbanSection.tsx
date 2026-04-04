@@ -156,9 +156,15 @@ export default function KanbanSection() {
     loadData();
   }, [loadData]);
 
-  // Abrir modal de detalhes se houver dealId na URL
+  // Sincronizar funil e abrir modal de detalhes se houver parâmetros na URL
   useEffect(() => {
+    const funnelId = searchParams.get('funnelId');
     const dealId = searchParams.get('dealId');
+
+    if (funnelId && funnelId !== selectedFunnelId) {
+      selectFunnel(funnelId);
+    }
+
     if (dealId && deals.length > 0) {
       const deal = deals.find(d => d.id === dealId);
       if (deal) {
@@ -166,7 +172,7 @@ export default function KanbanSection() {
         setIsDetailOpen(true);
       }
     }
-  }, [searchParams, deals]);
+  }, [searchParams, deals, selectedFunnelId, selectFunnel]);
 
   // Filtrar deals pelo funil selecionado
   const filteredDealsByFunnel = deals.filter(deal => deal.funnel_id === selectedFunnelId);

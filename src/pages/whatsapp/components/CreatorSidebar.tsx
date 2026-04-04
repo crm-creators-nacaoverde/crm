@@ -152,7 +152,7 @@ export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
           <button 
             onClick={() => {
               if (activeDeal) {
-                navigate(`/?section=kanban&funnelId=${activeDeal.funnel_id}&dealId=${activeDeal.id}`);
+                navigate(`/acompanhamento?funnelId=${activeDeal.funnel_id}&dealId=${activeDeal.id}`);
               } else {
                 navigate(`/creators?id=${client.id}`);
               }
