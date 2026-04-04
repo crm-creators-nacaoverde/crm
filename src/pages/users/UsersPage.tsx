@@ -161,53 +161,27 @@ export default function UsersPage() {
   }) => {
     try {
       const perms = getPermsForRole(userData.role);
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) throw new Error('Sessão expirada');
-
-      const supabaseUrl = import.meta.env.VITE_PUBLIC_SUPABASE_URL;
-      const functionUrl = `${supabaseUrl}/functions/v1/create-user`;
-      
       console.log('[handleCreateUser] Iniciando criação de usuário:', userData.email);
-      console.log('[handleCreateUser] URL da função:', functionUrl);
 
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: {
           full_name: userData.full_name,
           email: userData.email,
           password: userData.password,
           role: userData.role,
           permissions: perms,
           is_active: userData.is_active,
-        }),
+        },
       });
 
-      console.log('[handleCreateUser] Status da resposta:', response.status);
-
-      let result;
-      try {
-        result = await response.json();
-      } catch (e) {
-        console.error('[handleCreateUser] Erro ao parsear JSON:', e);
-        throw new Error(`Resposta inválida do servidor (status: ${response.status})`);
+      if (error) {
+        console.error('[handleCreateUser] Erro da API:', error);
+        throw new Error(error.message);
       }
 
-      if (!response.ok) {
-        const errorMsg = result?.error || `Erro HTTP ${response.status}`;
-        console.error('[handleCreateUser] Erro da API:', errorMsg, result);
-        throw new Error(errorMsg);
-      }
-
+      const result = data;
       console.log('[handleCreateUser] Usuário criado com sucesso:', result);
-
-      await logActivity({
-        action: 'create',
+      await logActivity({        action: 'create',
         module: 'users',
         entityId: result.user_id || 'unknown',
         entityName: userData.full_name,
