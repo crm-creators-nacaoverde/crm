@@ -57,7 +57,7 @@ export function useWhatsApp() {
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
-  const [filter, setFilter] = useState<'mine' | 'all' | 'pending'>('all');
+  const [filter, setFilter] = useState<'mine' | 'all' | 'pending' | 'closed'>('all');
   const channelRef = useRef<any>(null);
   const msgChannelRef = useRef<any>(null);
 
@@ -71,13 +71,20 @@ export function useWhatsApp() {
     let query = supabase
       .from('wa_conversations')
       .select('*')
-      .neq('status', 'closed')
       .order('last_message_at', { ascending: false });
 
     if (isAdmin) {
-      if (filter === 'pending') query = query.eq('status', 'pending');
-      else if (filter === 'mine') query = query.eq('assigned_to', profile?.id);
+      if (filter === 'closed') {
+        query = query.eq('status', 'closed');
+      } else if (filter === 'pending') {
+        query = query.eq('status', 'pending');
+      } else if (filter === 'mine') {
+        query = query.eq('assigned_to', profile?.id).neq('status', 'closed');
+      } else {
+        query = query.neq('status', 'closed');
+      }
     } else {
+      query = query.neq('status', 'closed');
       if (filter === 'pending') {
         query = query.is('assigned_to', null).eq('status', 'pending');
       } else if (filter === 'mine') {

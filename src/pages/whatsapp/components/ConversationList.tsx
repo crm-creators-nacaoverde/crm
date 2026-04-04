@@ -3,11 +3,11 @@ import { WaConversation } from '../../../hooks/useWhatsApp';
 interface Props {
   conversations: WaConversation[];
   activeConvId: string | null;
-  filter: 'mine' | 'all' | 'pending';
+  filter: 'mine' | 'all' | 'pending' | 'closed';
   loading: boolean;
   isAdmin: boolean;
   onSelect: (id: string) => void;
-  onSetFilter: (f: 'mine' | 'all' | 'pending') => void;
+  onSetFilter: (f: 'mine' | 'all' | 'pending' | 'closed') => void;
   onNewConversation: () => void;
 }
 
@@ -40,6 +40,7 @@ export default function ConversationList({
     ...(isAdmin ? [{ id: 'all' as const, label: 'Todas' }] : []),
     { id: 'mine', label: 'Minhas' },
     { id: 'pending', label: 'Pendentes' },
+    ...(isAdmin ? [{ id: 'closed' as const, label: 'Encerradas' }] : []),
   ];
 
   return (
@@ -115,6 +116,14 @@ export default function ConversationList({
                   </div>
                   {conv.status === 'pending' && (
                     <span className="text-[9px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full mt-0.5 inline-block">Pendente</span>
+                  )}
+                  {conv.status === 'closed' && (
+                    <div className="text-[9px] text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded-full mt-0.5 inline-block">
+                      <span className="font-semibold">Encerrada</span>
+                      {conv.outcome_reason_id && (
+                        <span className="ml-1 text-gray-500">({conv.outcome_reason_id})</span>
+                      )}
+                    </div>
                   )}
                 </div>
               </button>
