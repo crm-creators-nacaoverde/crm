@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCompanySettings } from '../../contexts/CompanySettingsContext';
 import { useSampleAlerts } from '../../hooks/useSampleAlerts';
 import { CadastrosProvider } from '../../contexts/CadastrosContext';
 import NotificationPanel from './NotificationPanel';
@@ -18,6 +19,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const { user, profile, loading, signOut, hasPermission } = useAuth();
+  const { settings: companySettings } = useCompanySettings();
   const navigate = useNavigate();
   const location = useLocation();
   const { alerts, unreadCount, markAsRead, markAllAsRead } = useSampleAlerts();
@@ -188,16 +190,24 @@ export default function AppLayout({ children }: AppLayoutProps) {
         {/* Logo area */}
         <div className={`h-[64px] flex items-center border-b border-gray-50 ${sidebarCollapsed ? 'px-3 justify-center' : 'px-5'}`}>
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 min-w-[36px] rounded-xl flex items-center justify-center">
-              <img
-                src="https://static.readdy.ai/image/70e45d590e9f98e53f87ef3694a62a6d/0c4980ef84e25e6962183ed0f1e9a202.png"
-                alt="Creator Milionário"
-                className="w-full h-full object-contain"
-              />
+            <div className="w-9 h-9 min-w-[36px] rounded-xl flex items-center justify-center bg-gray-100">
+              {companySettings.logo_base64 ? (
+                <img
+                  src={companySettings.logo_base64}
+                  alt={companySettings.name}
+                  className="w-full h-full object-contain p-1"
+                />
+              ) : (
+                <img
+                  src="https://static.readdy.ai/image/70e45d590e9f98e53f87ef3694a62a6d/0c4980ef84e25e6962183ed0f1e9a202.png"
+                  alt="Logo padrão"
+                  className="w-full h-full object-contain"
+                />
+              )}
             </div>
             {!sidebarCollapsed && (
               <div className="min-w-0">
-                <h1 className="text-[15px] font-bold text-gray-900 truncate leading-tight">CRM Creators</h1>
+                <h1 className="text-[15px] font-bold text-gray-900 truncate leading-tight">{companySettings.name || 'CRM Creators'}</h1>
                 <p className="text-[10px] text-gray-400 leading-tight mt-0.5">Gestão de Influenciadores</p>
               </div>
             )}
