@@ -8,13 +8,19 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
+  console.log('[create-user] Requisição recebida:', req.method);
+  
   if (req.method === "OPTIONS") {
+    console.log('[create-user] Respondendo a OPTIONS');
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const authHeader = req.headers.get("Authorization");
+    console.log('[create-user] Auth header presente:', !!authHeader);
+    
     if (!authHeader) {
+      console.error('[create-user] Sem header de autorização');
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
