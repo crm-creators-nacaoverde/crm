@@ -25,6 +25,9 @@ export default function WhatsAppPage() {
   // Selecionar ou iniciar conversa via parâmetro de telefone
   useEffect(() => {
     const phone = searchParams.get('phone');
+    const clientId = searchParams.get('clientId');
+    const clientName = searchParams.get('clientName');
+
     if (phone && !loading) {
       let digits = phone.replace(/\D/g, '');
       if (digits.length > 0 && !digits.startsWith('55')) {
@@ -34,24 +37,34 @@ export default function WhatsAppPage() {
       const conv = conversations.find(c => c.remote_jid === jid);
       
       if (conv) {
+        // Se a conversa existe mas não tem o creator vinculado, vincula agora
+        if (clientId && clientName && !conv.client_id) {
+          linkClient(conv.id, clientId, clientName);
+        }
+
         if (activeConvId !== conv.id) {
           selectConversation(conv.id);
         }
-        // Limpa o parâmetro da URL após selecionar
+        
+        // Limpa os parâmetros da URL após selecionar
         const newParams = new URLSearchParams(searchParams);
         newParams.delete('phone');
+        newParams.delete('clientId');
+        newParams.delete('clientName');
         window.history.replaceState({}, '', `${window.location.pathname}?${newParams.toString()}`);
       } else {
-        // Se não encontrar na lista atual, tenta iniciar uma nova conversa
-        startConversation(digits, null, digits).then(() => {
-          // Limpa o parâmetro da URL após iniciar
+        // Se não encontrar na lista atual, tenta iniciar uma nova conversa já vinculada
+        startConversation(digits, clientId, clientName || digits).then(() => {
+          // Limpa os parâmetros da URL após iniciar
           const newParams = new URLSearchParams(searchParams);
           newParams.delete('phone');
+          newParams.delete('clientId');
+          newParams.delete('clientName');
           window.history.replaceState({}, '', `${window.location.pathname}?${newParams.toString()}`);
         });
       }
     }
-  }, [searchParams, conversations, loading, activeConvId, selectConversation, startConversation]);
+  }, [searchParams, conversations, loading, activeConvId, selectConversation, startConversation, linkClient]);
 
   const [showNewConv, setShowNewConv]     = useState(false);
   const [showCloseConv, setShowCloseConv] = useState(false);
