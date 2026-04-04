@@ -13,6 +13,10 @@ import MonthlyEvolution from './components/MonthlyEvolution';
 import GoalCard from './components/GoalCard';
 import GoalFormModal from './components/GoalFormModal';
 import RankingTable from './components/RankingTable';
+import LogisticsWidget from './widgets/LogisticsWidget';
+import FinanceWidget from './widgets/FinanceWidget';
+import BibleWidget from './widgets/BibleWidget';
+import WhatsAppWidget from './widgets/WhatsAppWidget';
 
 export type GmvPeriod = '7d' | '14d' | '28d' | '30d';
 
@@ -65,6 +69,10 @@ const WIDGET_CATALOG = [
   { type: 'gmv_overview',         label: 'Visão Geral de GMV',       icon: 'ri-money-dollar-circle-line',desc: 'GMV detalhado por período' },
   { type: 'rfm_summary',          label: 'Análise RFM',              icon: 'ri-user-star-line',          desc: 'Segmentação de creators por atividade, conteúdo e GMV' },
   { type: 'goal_progress',        label: 'Progresso de Metas',       icon: 'ri-target-line',             desc: 'Metas ativas com barra de progresso em tempo real' },
+  { type: 'logistics_summary',    label: 'Logística',                icon: 'ri-truck-line',              desc: 'Status de envios e produtos mais enviados' },
+  { type: 'finance_summary',      label: 'Financeiro',               icon: 'ri-money-dollar-circle-line',desc: 'Pagamentos, tipos de chave e top creators' },
+  { type: 'bible_summary',        label: 'Bíblia Comercial',         icon: 'ri-book-open-line',          desc: 'Engajamento em aulas e materiais' },
+  { type: 'whatsapp_summary',     label: 'WhatsApp',                 icon: 'ri-whatsapp-line',           desc: 'Métricas de conversas inbound e outbound' },
 ];
 
 const DASHBOARD_COLORS = [
@@ -123,6 +131,10 @@ function WidgetRenderer({
     case 'gmv_overview':       return <GmvOverview clients={clients} gmvPeriod={gmvPeriod} />;
     case 'rfm_summary':        return <RfmSummary clients={clients} gmvPeriod={gmvPeriod} />;
     case 'goal_progress':      return <GoalProgressWidget />;
+    case 'logistics_summary':  return <LogisticsWidget />;
+    case 'finance_summary':    return <FinanceWidget />;
+    case 'bible_summary':      return <BibleWidget />;
+    case 'whatsapp_summary':   return <WhatsAppWidget />;
     default:
       return (
         <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
