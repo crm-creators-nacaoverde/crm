@@ -778,7 +778,13 @@ export default function DealDetailModal({
                     <>
                       {client.phone && (
                         <button 
-                          onClick={() => navigate(`/whatsapp?phone=${client.phone.replace(/\D/g, '')}`)}
+                          onClick={() => {
+                            let digits = client.phone.replace(/\D/g, '');
+                            if (digits.length > 0 && !digits.startsWith('55')) {
+                              digits = '55' + digits;
+                            }
+                            navigate(`/whatsapp?phone=${digits}`);
+                          }}
                           className="inline-flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 rounded-lg text-sm text-emerald-700 font-medium transition-all cursor-pointer">
                           <i className="ri-whatsapp-line text-sm"></i>{client.phone}
                         </button>

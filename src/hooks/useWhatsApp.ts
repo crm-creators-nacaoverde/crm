@@ -269,8 +269,14 @@ export function useWhatsApp() {
     clientId: string | null,
     clientName: string,
   ): Promise<string | null> => {
-    const digits = phone.replace(/\D/g, '');
+    let digits = phone.replace(/\D/g, '');
     if (!digits) return null;
+    
+    // Garantir prefixo 55 para números brasileiros
+    if (digits.length > 0 && !digits.startsWith('55')) {
+      digits = '55' + digits;
+    }
+    
     const jid = digits + '@s.whatsapp.net';
 
     const { data: existing } = await supabase

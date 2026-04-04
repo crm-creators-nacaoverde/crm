@@ -26,7 +26,10 @@ export default function WhatsAppPage() {
   useEffect(() => {
     const phone = searchParams.get('phone');
     if (phone && !loading) {
-      const digits = phone.replace(/\D/g, '');
+      let digits = phone.replace(/\D/g, '');
+      if (digits.length > 0 && !digits.startsWith('55')) {
+        digits = '55' + digits;
+      }
       const jid = digits + '@s.whatsapp.net';
       const conv = conversations.find(c => c.remote_jid === jid);
       
@@ -36,8 +39,6 @@ export default function WhatsAppPage() {
         }
       } else {
         // Se não encontrar na lista atual, tenta iniciar uma nova conversa
-        // Passamos o nome do cliente se estiver disponível na sidebar ou contexto, 
-        // mas aqui usamos o próprio telefone como fallback inicial
         startConversation(digits, null, digits);
       }
     }
