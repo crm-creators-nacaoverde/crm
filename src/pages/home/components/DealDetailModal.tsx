@@ -775,10 +775,11 @@ export default function DealDetailModal({
                   {editSection !== 'contato' && (
                     <>
                       {client.phone && (
-                        <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}`} target="_blank" rel="nofollow noopener noreferrer"
+                        <button 
+                          onClick={() => navigate(`/whatsapp?phone=${client.phone.replace(/\D/g, '')}`)}
                           className="inline-flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 rounded-lg text-sm text-emerald-700 font-medium transition-all cursor-pointer">
                           <i className="ri-whatsapp-line text-sm"></i>{client.phone}
-                        </a>
+                        </button>
                       )}
                       {client.email && (
                         <span className="inline-flex items-center gap-2 text-sm text-gray-500">

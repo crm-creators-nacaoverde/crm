@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import AppLayout from '../../components/feature/AppLayout';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWhatsApp } from '../../hooks/useWhatsApp';
@@ -12,6 +13,7 @@ import ConnectModal        from './components/ConnectModal';
 
 export default function WhatsAppPage() {
   const { user, profile, hasPermission } = useAuth();
+  const [searchParams] = useSearchParams();
   const {
     conversations, messages, activeConvId, activeConversation,
     loading, loadingMessages, sending, filter, totalUnread, isAdmin,
@@ -19,6 +21,23 @@ export default function WhatsAppPage() {
     assignConversation, transferConversation, linkClient, closeConversation, startConversation,
     loadConversations,
   } = useWhatsApp();
+
+  // Selecionar conversa via parâmetro de telefone
+  useEffect(() => {
+    const phone = searchParams.get('phone');
+    if (phone && conversations.length > 0) {
+      const digits = phone.replace(/\D/g, '');
+      const jid = digits + '@s.whatsapp.net';
+      const conv = conversations.find(c => c.remote_jid === jid);
+      if (conv) {
+        selectConversation(conv.id);
+      } else {
+        // Se não encontrar, pode ser uma nova conversa
+        // Mas como as conversas vêm do banco, se não estiver lá, não selecionamos nada por enquanto
+        // O startConversation poderia ser usado aqui se quiséssemos criar automaticamente
+      }
+    }
+  }, [searchParams, conversations, selectConversation]);
 
   const [showNewConv, setShowNewConv]     = useState(false);
   const [showCloseConv, setShowCloseConv] = useState(false);
