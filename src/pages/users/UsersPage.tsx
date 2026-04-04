@@ -184,8 +184,18 @@ export default function UsersPage() {
       }
     );
 
+    if (!response.ok) {
+      let errorMsg = 'Erro ao criar usuário';
+      try {
+        const result = await response.json();
+        errorMsg = result.error || errorMsg;
+      } catch (e) {
+        errorMsg = `Erro HTTP ${response.status}: ${response.statusText}`;
+      }
+      throw new Error(errorMsg);
+    }
+
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Erro ao criar usuário');
 
     await logActivity({
       action: 'create',

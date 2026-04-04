@@ -119,7 +119,9 @@ Deno.serve(async (req) => {
       }
     );
   } catch (error) {
-    return new Response(JSON.stringify({ error: "Erro interno do servidor" }), {
+    console.error('[create-user] Erro:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Erro interno do servidor';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
