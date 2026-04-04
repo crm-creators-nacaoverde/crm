@@ -1,77 +1,113 @@
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// CORS headers configuration
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS, GET",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, accept",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Max-Age": "86400",
 };
 
+// Helper function to create CORS response
+function corsResponse(body: any, status: number = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+    },
+  });
+}
+
 Deno.serve(async (req) => {
-  console.log('[create-user] Requisição recebida:', req.method);
-  
+  console.log(`[create-user] ${req.method} ${req.url}`);
+
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    console.log('[create-user] Respondendo a OPTIONS');
-    return new Response("ok", {
-      status: 200,
+    console.log("[create-user] Handling OPTIONS request");
+    return new Response(null, {
+      status: 204,
       headers: corsHeaders,
     });
   }
 
+  // Only accept POST requests
+  if (req.method !== "POST") {
+    return corsResponse({ error: "Method not allowed" }, 405);
+  }
+
   try {
+    // Get authorization header
     const authHeader = req.headers.get("Authorization");
-    console.log('[create-user] Auth header presente:', !!authHeader);
-    
     if (!authHeader) {
-      console.error('[create-user] Sem header de autorização');
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("[create-user] Missing authorization header");
+      return corsResponse({ error: "Não autorizado - header de autorização ausente" }, 401);
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // Get environment variables
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
-    // Client with user's token to verify they are admin
-    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
+      console.error("[create-user] Missing environment variables");
+      return corsResponse({ error: "Configuração do servidor incompleta" }, 500);
+    }
+
+    // Create client with user's token to verify they are admin
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
+    // Get current user
     const { data: { user: callerUser }, error: authError } = await userClient.auth.getUser();
     if (authError || !callerUser) {
-      return new Response(JSON.stringify({ error: "Não autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error("[create-user] Auth error:", authError?.message);
+      return corsResponse({ error: "Não autorizado - token inválido" }, 401);
     }
 
+    console.log(`[create-user] User authenticated: ${callerUser.id}`);
+
     // Check if caller is admin
-    const { data: callerProfile } = await userClient
+    const { data: callerProfile, error: profileError } = await userClient
       .from("user_profiles")
       .select("role")
       .eq("id", callerUser.id)
       .maybeSingle();
 
-    if (!callerProfile || callerProfile.role !== "admin") {
-      return new Response(JSON.stringify({ error: "Apenas administradores podem criar usuários" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (profileError) {
+      console.error("[create-user] Profile query error:", profileError.message);
+      return corsResponse({ error: "Erro ao verificar permissões" }, 500);
     }
 
-    // Admin client with service role
+    if (!callerProfile || callerProfile.role !== "admin") {
+      console.error("[create-user] User is not admin");
+      return corsResponse({ error: "Apenas administradores podem criar usuários" }, 403);
+    }
+
+    console.log("[create-user] User is admin, proceeding with user creation");
+
+    // Parse request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (e) {
+      console.error("[create-user] Invalid JSON body:", e.message);
+      return corsResponse({ error: "Corpo da requisição inválido" }, 400);
+    }
+
+    const { full_name, email, password, role, permissions, is_active } = body;
+
+    // Validate required fields
+    if (!full_name || !email || !password) {
+      console.error("[create-user] Missing required fields");
+      return corsResponse({ error: "Nome, email e senha são obrigatórios" }, 400);
+    }
+
+    // Create admin client with service role
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { full_name, email, password, role, permissions, is_active } = await req.json();
-
-    if (!full_name || !email || !password) {
-      return new Response(JSON.stringify({ error: "Nome, email e senha são obrigatórios" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    console.log(`[create-user] Creating auth user for ${email}`);
 
     // Create auth user
     const { data: newAuthUser, error: createError } = await adminClient.auth.admin.createUser({
@@ -82,15 +118,23 @@ Deno.serve(async (req) => {
     });
 
     if (createError) {
+      console.error("[create-user] Auth creation error:", createError.message);
+      
       let errorMsg = "Erro ao criar usuário";
-      if (createError.message.includes("already been registered") || createError.message.includes("already exists")) {
+      if (createError.message.includes("already been registered") || 
+          createError.message.includes("already exists")) {
         errorMsg = "Este email já está cadastrado";
       }
-      return new Response(JSON.stringify({ error: errorMsg }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      
+      return corsResponse({ error: errorMsg }, 400);
     }
+
+    if (!newAuthUser?.user?.id) {
+      console.error("[create-user] No user ID returned from auth creation");
+      return corsResponse({ error: "Erro ao criar usuário - ID não retornado" }, 500);
+    }
+
+    console.log(`[create-user] Auth user created: ${newAuthUser.user.id}`);
 
     // Create user profile
     const defaultPermissions = {
@@ -101,7 +145,7 @@ Deno.serve(async (req) => {
       users: { view: false, edit: false },
     };
 
-    const { error: profileError } = await adminClient
+    const { error: profileError: insertProfileError } = await adminClient
       .from("user_profiles")
       .insert({
         id: newAuthUser.user.id,
@@ -112,28 +156,26 @@ Deno.serve(async (req) => {
         is_active: is_active !== undefined ? is_active : true,
       });
 
-    if (profileError) {
+    if (insertProfileError) {
+      console.error("[create-user] Profile creation error:", insertProfileError.message);
+      
       // Rollback: delete auth user if profile creation fails
       await adminClient.auth.admin.deleteUser(newAuthUser.user.id);
-      return new Response(JSON.stringify({ error: "Erro ao criar perfil do usuário" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      
+      return corsResponse({ error: "Erro ao criar perfil do usuário" }, 500);
     }
 
-    return new Response(
-      JSON.stringify({ success: true, user_id: newAuthUser.user.id }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    console.log(`[create-user] User profile created successfully`);
+
+    return corsResponse({
+      success: true,
+      user_id: newAuthUser.user.id,
+      message: "Usuário criado com sucesso",
+    }, 200);
+
   } catch (error) {
-    console.error('[create-user] Erro:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erro interno do servidor';
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("[create-user] Unexpected error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Erro interno do servidor";
+    return corsResponse({ error: errorMessage }, 500);
   }
 });
