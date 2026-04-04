@@ -1,23 +1,32 @@
 import { useState, useEffect } from 'react';
-import { supabase, Interaction, Client } from '../../../lib/supabase';
+import { supabase, Interaction, Client, UserProfile } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useActivityLog } from '../../../hooks/useActivityLog';
 import Button from '../../../components/base/Button';
 import Input from '../../../components/base/Input';
 import Modal from '../../../components/base/Modal';
+import InteractionsFilterBar from './InteractionsFilterBar';
 
 export default function InteractionsSection() {
   const [interactions, setInteractions] = useState<(Interaction & { client?: Client })[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all');
+  const [filterType, setFilterType] = useState('all'); // Mantém para compatibilidade
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedInteraction, setSelectedInteraction] = useState<Interaction | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const { user, hasPermission } = useAuth();
   const { logActivity } = useActivityLog();
   const [interactionTypes, setInteractionTypes] = useState<{ id: string; name: string; icon: string; color: string }[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [filters, setFilters] = useState({
+    dateRange: { start: '', end: '' },
+    responsible: '',
+    creator: '',
+    type: 'all',
+    searchTerm: '',
+  });
 
   const [formData, setFormData] = useState({
     client_id: '',
@@ -32,10 +41,21 @@ export default function InteractionsSection() {
 
   useEffect(() => {
     loadData();
+    loadUsers();
     supabase.from('interaction_types').select('id, name, icon, color')
       .eq('is_active', true).order('sort_order')
       .then(({ data }) => { if (data && data.length > 0) setInteractionTypes(data); });
   }, []);
+
+  const loadUsers = async () => {
+    try {
+      const { data, error } = await supabase.from('user_profiles').select('*');
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -61,18 +81,45 @@ export default function InteractionsSection() {
 
   const filteredInteractions = interactions.filter(interaction => {
     const clientName = interaction.client?.name || '';
-    const matchesSearch = clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         interaction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (interaction.description || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'all' || interaction.type === filterType;
-    return matchesSearch && matchesType;
+    const interactionDate = new Date(interaction.date);
+    
+    // Search filter
+    const matchesSearch = clientName.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+                         interaction.title.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+                         (interaction.description || '').toLowerCase().includes(filters.searchTerm.toLowerCase());
+    
+    // Type filter
+    const matchesType = filters.type === 'all' || interaction.type === filters.type;
+    
+    // Creator filter
+    const matchesCreator = !filters.creator || interaction.client_id === filters.creator;
+    
+    // Responsible filter (created_by)
+    const matchesResponsible = !filters.responsible || interaction.created_by === filters.responsible;
+    
+    // Date range filter
+    let matchesDateRange = true;
+    if (filters.dateRange.start || filters.dateRange.end) {
+      const startDate = filters.dateRange.start ? new Date(filters.dateRange.start) : null;
+      const endDate = filters.dateRange.end ? new Date(filters.dateRange.end) : null;
+      
+      if (startDate && interactionDate < startDate) matchesDateRange = false;
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        if (interactionDate > endOfDay) matchesDateRange = false;
+      }
+    }
+    
+    return matchesSearch && matchesType && matchesCreator && matchesResponsible && matchesDateRange;
   });
 
   const handleAddInteraction = () => {
     setSelectedInteraction(null);
     setFormData({ client_id: '', type: interactionTypes[0]?.name || 'other', title: '', description: '', date: new Date().toISOString().split('T')[0] });
     setIsModalOpen(true);
-  };
+    setFilters({ ...filters, searchTerm: '' });
+  };   setFilters({ ...filters, searchTerm: '' });};
 
   const handleViewInteraction = (interaction: Interaction) => {
     setSelectedInteraction(interaction);
@@ -233,39 +280,14 @@ export default function InteractionsSection() {
         })}
       </div>
 
-      {/* Search and Category Bar */}
-      <div className="bg-white rounded-2xl border border-gray-100 p-2 shadow-sm">
-        <div className="flex flex-col md:flex-row items-center gap-2">
-          <div className="relative flex-1 w-full">
-            <i className="ri-search-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg"></i>
-            <input
-              type="text"
-              placeholder="Buscar por creator, título ou descrição..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 text-sm border-none focus:ring-0 bg-transparent placeholder:text-gray-400"
-            />
-          </div>
-          <div className="h-8 w-px bg-gray-100 hidden md:block"></div>
-          <div className="flex items-center gap-1 p-1 overflow-x-auto w-full md:w-auto no-scrollbar">
-            <button
-              onClick={() => setFilterType('all')}
-              className={`px-4 py-2 text-xs font-semibold rounded-xl whitespace-nowrap transition-all ${filterType === 'all' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
-            >
-              Todos
-            </button>
-            {interactionTypes.map((type) => (
-              <button
-                key={type.id}
-                onClick={() => setFilterType(type.name)}
-                className={`px-4 py-2 text-xs font-semibold rounded-xl whitespace-nowrap transition-all ${filterType === type.name ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
-              >
-                {type.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* Advanced Filter Bar */}
+      <InteractionsFilterBar
+        filters={filters}
+        onFilterChange={setFilters}
+        clients={clients}
+        users={users}
+        interactionTypes={interactionTypes}
+      />
 
       {/* Timeline List */}
       <div className="relative">
