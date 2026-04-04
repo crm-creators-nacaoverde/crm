@@ -11,6 +11,7 @@ interface FormTemplate {
   id: string;
   name: string;
   public_name?: string | null;
+  slug?: string | null;
   description: string;
   fields: FormField[];
   is_active: boolean;
@@ -56,6 +57,7 @@ export default function FormBuilderModal({ isOpen, onClose, onSaved, editingForm
   const { logActivity } = useActivityLog();
   const [formName, setFormName] = useState('');
   const [formPublicName, setFormPublicName] = useState('');
+  const [formSlug, setFormSlug] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [fields, setFields] = useState<FormField[]>([]);
   const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
@@ -87,6 +89,7 @@ export default function FormBuilderModal({ isOpen, onClose, onSaved, editingForm
     if (editingForm) {
       setFormName(editingForm.name);
       setFormPublicName(editingForm.public_name || '');
+      setFormSlug(editingForm.slug || '');
       setFormDescription(editingForm.description || '');
       setFields(editingForm.fields || []);
       setSelectedFunnelId(editingForm.auto_funnel_id || '');
@@ -97,6 +100,7 @@ export default function FormBuilderModal({ isOpen, onClose, onSaved, editingForm
     } else {
       setFormName('');
       setFormPublicName('');
+      setFormSlug('');
       setFormDescription('');
       setFields([]);
       setSelectedFunnelId('');
@@ -108,6 +112,28 @@ export default function FormBuilderModal({ isOpen, onClose, onSaved, editingForm
     setActiveTab('editor');
     setError('');
   }, [editingForm, isOpen]);
+
+  // Função para gerar slug a partir de uma string
+  const slugify = (text: string) => {
+    return text
+      .toString()
+      .toLowerCase()
+      .trim()
+      .normalize('NFD') // Remove acentos
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s-]/g, '') // Remove caracteres especiais
+      .replace(/[\s_-]+/g, '-') // Substitui espaços e underscores por hífens
+      .replace(/^-+|-+$/g, ''); // Remove hífens no início e fim
+  };
+
+  // Atualizar slug automaticamente quando o nome público mudar (apenas se não for edição manual ou se estiver vazio)
+  const handlePublicNameChange = (val: string) => {
+    setFormPublicName(val);
+    // Se estiver criando um novo ou se o slug atual for igual ao slug do nome anterior, atualiza
+    if (!editingForm || !formSlug || formSlug === slugify(formPublicName)) {
+      setFormSlug(slugify(val));
+    }
+  };
 
   // Quando muda o funil selecionado, carregar etapas
   useEffect(() => {
@@ -227,6 +253,7 @@ export default function FormBuilderModal({ isOpen, onClose, onSaved, editingForm
       const formData = {
         name: formName,
         public_name: formPublicName.trim() || null,
+        slug: formSlug.trim() || null,
         description: formDescription,
         fields,
         is_active: editingForm?.is_active ?? true,
@@ -480,12 +507,32 @@ export default function FormBuilderModal({ isOpen, onClose, onSaved, editingForm
               <input
                 type="text"
                 value={formPublicName}
-                onChange={(e) => setFormPublicName(e.target.value)}
+                onChange={(e) => handlePublicNameChange(e.target.value)}
                 placeholder="Ex: Cadastro de Creator"
                 className="w-full px-3 py-2 text-sm border border-teal-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all"
               />
               <p className="text-[10px] text-gray-400 mt-1">Título que o creator verá no formulário. Se vazio, usa o nome interno.</p>
             </div>
+          </div>
+
+          {/* Row: Slug (URL amigável) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5 flex items-center gap-1.5">
+              <i className="ri-link text-indigo-500 text-xs"></i>
+              Slug (URL amigável)
+              <span className="ml-1 px-1.5 py-0.5 text-[9px] font-semibold bg-indigo-50 text-indigo-600 rounded-full uppercase tracking-wide">URL amigável</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 font-mono bg-gray-50 px-2 py-2 rounded-lg border border-gray-100">/f/</span>
+              <input
+                type="text"
+                value={formSlug}
+                onChange={(e) => setFormSlug(slugify(e.target.value))}
+                placeholder="Ex: cadastro-embaixadores"
+                className="flex-1 px-3 py-2 text-sm border border-indigo-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all font-mono"
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1">Identificador único para o link do formulário. Gerado automaticamente a partir do nome público.</p>
           </div>
 
           {/* Row 2: Descrição */}
