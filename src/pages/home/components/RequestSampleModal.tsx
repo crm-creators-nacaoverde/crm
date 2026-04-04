@@ -38,6 +38,8 @@ export default function RequestSampleModal({
   const [clientName, setClientName] = useState('');
   const { logClientEvent } = useClientHistory();
   const [carrierOptions, setCarrierOptions] = useState<string[]>(CARRIER_FALLBACK);
+  const [availableProducts, setAvailableProducts] = useState<{ id: string; name: string }[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
   const [form, setForm] = useState({
     shipping_status: 'pending',
@@ -51,6 +53,15 @@ export default function RequestSampleModal({
 
   useEffect(() => {
     if (isOpen && clientId) {
+      // Carregar produtos ativos
+      supabase.from('products')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name')
+        .then(({ data }) => {
+          if (data) setAvailableProducts(data);
+        });
+
       // Carregar dados do cliente para o endereço inicial
       supabase.from('clients')
         .select('name, endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep')
@@ -88,6 +99,13 @@ export default function RequestSampleModal({
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
+      // Combinar produtos selecionados com as notas manuais
+      const productsText = selectedProducts.length > 0 
+        ? `Produtos: ${selectedProducts.join(', ')}` 
+        : '';
+      
+      const finalNotes = [productsText, form.notes].filter(Boolean).join('\n');
+
       const { error } = await supabase.from('logistics').insert({
         client_id: clientId,
         deal_id: dealId,
@@ -98,7 +116,7 @@ export default function RequestSampleModal({
         shipping_date: form.shipping_date || null,
         estimated_delivery: form.estimated_delivery || null,
         shipping_address: form.shipping_address || null,
-        notes: form.notes || null,
+        notes: finalNotes || null,
         created_by: user?.id || null,
       });
 
@@ -195,14 +213,47 @@ export default function RequestSampleModal({
           />
         </div>
 
+        {/* Seleção de Produtos Cadastrados */}
         <div>
-          <label className={labelClass}>Observações / Produtos</label>
+          <label className={labelClass}>Produtos Cadastrados</label>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {availableProducts.map(product => {
+              const isSelected = selectedProducts.includes(product.name);
+              return (
+                <button
+                  key={product.id}
+                  onClick={() => {
+                    setSelectedProducts(prev => 
+                      isSelected 
+                        ? prev.filter(p => p !== product.name) 
+                        : [...prev, product.name]
+                    );
+                  }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all cursor-pointer ${
+                    isSelected 
+                      ? 'bg-[#5de0e6] text-white border-[#5de0e6] shadow-sm' 
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-[#5de0e6] hover:text-[#5de0e6]'
+                  }`}
+                >
+                  {product.name}
+                  {isSelected && <i className="ri-check-line ml-1.5"></i>}
+                </button>
+              );
+            })}
+            {availableProducts.length === 0 && (
+              <p className="text-xs text-gray-400 italic">Nenhum produto ativo encontrado no cadastro.</p>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label className={labelClass}>Observações Adicionais</label>
           <textarea
             value={form.notes}
             onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-            rows={3}
+            rows={2}
             className={inputClass}
-            placeholder="Liste os produtos solicitados ou observações importantes..."
+            placeholder="Observações importantes sobre o envio..."
           />
         </div>
 
