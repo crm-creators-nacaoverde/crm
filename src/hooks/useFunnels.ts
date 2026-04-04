@@ -161,12 +161,19 @@ export function useFunnels() {
 
       if (error) throw error;
 
+      // Atualizar estado local imediatamente para refletir na UI
+      const remaining = funnels.filter(f => f.id !== id);
+      setFunnels(remaining);
+      setCachedFunnels(remaining);
+
       if (selectedFunnelId === id) {
-        const remaining = funnels.filter(f => f.id !== id);
         if (remaining.length > 0) {
           const newSelected = remaining.find(f => f.is_default) || remaining[0];
           setSelectedFunnelId(newSelected.id);
           setSelectedFunnelIdState(newSelected.id);
+        } else {
+          localStorage.removeItem(SELECTED_FUNNEL_KEY);
+          setSelectedFunnelIdState(null);
         }
       }
 
