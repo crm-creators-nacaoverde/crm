@@ -366,5 +366,49 @@ export function useWaConfig() {
     await loadConfig();
   };
 
-  return { config, loading, saveConfig, loadConfig };
+  const fetchQrCode = useCallback(async (): Promise<string | null> => {
+    if (!config?.api_url || !config?.api_key || !config?.instance_name) return null;
+    try {
+      const response = await fetch(`${config.api_url}/instance/fetch-qrcode`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': config.api_key,
+        },
+        body: JSON.stringify({ instanceName: config.instance_name }),
+      });
+      const data = await response.json();
+      if (response.ok && data.qrcode) {
+        await saveConfig({ qr_code: data.qrcode, is_connected: false });
+        return data.qrcode;
+      }
+      return null;
+    } catch (error) {
+      console.error('Erro ao buscar QR Code:', error);
+      return null;
+    }
+  }, [config, saveConfig]);
+
+  const checkConnection = useCallback(async (): Promise<boolean> => {
+    if (!config?.api_url || !config?.api_key || !config?.instance_name) return false;
+    try {
+      const response = await fetch(`${config.api_url}/instance/connection-state`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': config.api_key,
+        },
+      });
+      const data = await response.json();
+      const isConnected = response.ok && data.state === 'connected';
+      await saveConfig({ is_connected: isConnected, qr_code: isConnected ? null : config.qr_code });
+      return isConnected;
+    } catch (error) {
+      console.error('Erro ao verificar conexão:', error);
+      await saveConfig({ is_connected: false });
+      return false;
+    }
+  }, [config, saveConfig]);
+
+  return { config, loading, saveConfig, loadConfig, fetchQrCode, checkConnection };
 }

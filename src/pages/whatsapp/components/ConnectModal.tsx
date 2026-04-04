@@ -7,7 +7,7 @@ interface Props {
 }
 
 export default function ConnectModal({ isOpen, onClose }: Props) {
-  const { config, loading, saveConfig, fetchQrCode, checkConnection } = useWaConfig();
+  const { config, loading, saveConfig, fetchQrCode, checkConnection, loadConfig } = useWaConfig();
   const [form, setForm] = useState({ api_url: '', api_key: '', instance_name: '', webhook_secret: '' });
   const [qr, setQr] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -17,7 +17,13 @@ export default function ConnectModal({ isOpen, onClose }: Props) {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (isOpen && config) {
+    if (isOpen) {
+      loadConfig(); // Garante que o config mais recente seja carregado ao abrir o modal
+    }
+  }, [isOpen, loadConfig]);
+
+  useEffect(() => {
+    if (config) {
       setForm({
         api_url: config.api_url || '',
         api_key: config.api_key || '',
@@ -27,7 +33,7 @@ export default function ConnectModal({ isOpen, onClose }: Props) {
       setQr(config.qr_code || null);
       setConnected(config.is_connected);
     }
-  }, [isOpen, config]);
+  }, [config]);
 
   // Polling de status ao exibir QR
   useEffect(() => {
@@ -38,7 +44,7 @@ export default function ConnectModal({ isOpen, onClose }: Props) {
       }, 5000);
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [qr, connected]);
+  }, [qr, connected, checkConnection]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -58,6 +64,7 @@ export default function ConnectModal({ isOpen, onClose }: Props) {
     setChecking(true);
     const ok = await checkConnection();
     setConnected(ok);
+    await loadConfig(); // Recarrega a configuração para obter o estado mais recente do Supabase
     setChecking(false);
   };
 
