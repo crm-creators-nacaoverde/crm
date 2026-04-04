@@ -24,7 +24,7 @@ interface PaymentFormData {
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (payload?: any) => void;
   editing?: PaymentFormData | null;
 }
 
@@ -32,6 +32,14 @@ interface Props {
 const PIX_TYPE_LABELS: Record<string, string> = {
   cpf: 'CPF', cnpj: 'CNPJ', email: 'E-mail', telefone: 'Telefone', aleatoria: 'Aleatória',
 };
+
+const PAYMENT_TYPES_FALLBACK = [
+  { value: 'premiacao', label: 'Premiação', icon: 'ri-trophy-line', color: 'text-amber-700 bg-amber-50 border-amber-200' },
+  { value: 'cache', label: 'Cachê', icon: 'ri-money-dollar-circle-line', color: 'text-blue-700 bg-blue-50 border-blue-200' },
+  { value: 'bonus', label: 'Bônus', icon: 'ri-gift-line', color: 'text-purple-700 bg-purple-50 border-purple-200' },
+  { value: 'reembolso', label: 'Reembolso', icon: 'ri-refund-line', color: 'text-teal-700 bg-teal-50 border-teal-200' },
+  { value: 'outro', label: 'Outro', icon: 'ri-more-line', color: 'text-gray-700 bg-gray-50 border-gray-200' },
+];
 
 export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: Props) {
   const { user } = useAuth();
@@ -161,12 +169,29 @@ export default function FinanceFormModal({ isOpen, onClose, onSaved, editing }: 
     if (editing?.id) {
       await supabase.from('creator_payments').update(payload).eq('id', editing.id);
       await logActivity({ action: 'update', module: 'financeiro', entityId: editing.id, entityName: form.client_name, details: { type: form.type, amount: parseFloat(form.amount), status: form.status } });
+      
+      setSaving(false);
+      onSaved({
+        isNew: false,
+        client_id: form.client_id,
+        type: form.type,
+        amount: parseFloat(form.amount),
+        status: form.status,
+        previousStatus: editing.status
+      });
     } else {
       const { data: newPay } = await supabase.from('creator_payments').insert({ ...payload, created_by: user?.id || null, created_by_name: user?.email || '' }).select('id').single();
       await logActivity({ action: 'create', module: 'financeiro', entityId: newPay?.id, entityName: form.client_name, details: { type: form.type, amount: parseFloat(form.amount) } });
+      
+      setSaving(false);
+      onSaved({
+        isNew: true,
+        client_id: form.client_id,
+        type: form.type,
+        amount: parseFloat(form.amount),
+        status: form.status
+      });
     }
-    setSaving(false);
-    onSaved();
     onClose();
   };
 
