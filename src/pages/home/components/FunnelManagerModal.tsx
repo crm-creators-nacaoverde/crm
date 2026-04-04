@@ -472,11 +472,27 @@ export default function FunnelManagerModal({ isOpen, onClose }: FunnelManagerMod
     const fStats = stats.get(deletingId);
     
     try {
-      // 1. Tratar as negociações (deals)
+      // 1. Limpar referências em outras tabelas (setar para null ou deletar)
+      
+      // WhatsApp chats (setar funnel_id para null)
+      await supabase.from('whatsapp_chats').update({ funnel_id: null }).eq('funnel_id', deletingId);
+      
+      // Webhook endpoints (setar funnel_id para null)
+      await supabase.from('webhook_endpoints').update({ funnel_id: null }).eq('funnel_id', deletingId);
+      
+      // Formulários (setar auto_funnel_id para null)
+      await supabase.from('forms').update({ auto_funnel_id: null, auto_stage_id: null }).eq('auto_funnel_id', deletingId);
+      
+      // Metas (deletar metas vinculadas ao funil)
+      await supabase.from('goals').delete().eq('funnel_id', deletingId);
+      
+      // Automações de etapa (deletar automações vinculadas ao funil)
+      await supabase.from('stage_automations').delete().eq('funnel_id', deletingId);
+
+      // 2. Tratar as negociações (deals)
       if (fStats && fStats.dealCount > 0) {
         if (moveToFunnelId) {
           // Mover para outro funil
-          // Precisamos também mover para a primeira etapa do funil de destino para evitar erros de stage_id
           const { data: targetStages } = await supabase
             .from('funnel_stages')
             .select('id')
@@ -498,10 +514,10 @@ export default function FunnelManagerModal({ isOpen, onClose }: FunnelManagerMod
         }
       }
 
-      // 2. Excluir as etapas (stages) do funil
+      // 3. Excluir as etapas (stages) do funil
       await supabase.from('funnel_stages').delete().eq('funnel_id', deletingId);
 
-      // 3. Excluir o funil
+      // 4. Excluir o funil
       const result = await deleteFunnel(deletingId);
       
       if (!result.success) {
@@ -528,7 +544,8 @@ export default function FunnelManagerModal({ isOpen, onClose }: FunnelManagerMod
       await loadStats();
     } catch (error: any) {
       console.error('Erro ao excluir funil:', error);
-      alert(`Não foi possível excluir o funil: ${error.message}`);
+      const errorMessage = error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+      alert(`Não foi possível excluir o funil: ${errorMessage}`);
     }
   };
 
