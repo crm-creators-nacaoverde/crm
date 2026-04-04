@@ -4,6 +4,7 @@ import { WaConversation } from '../../../hooks/useWhatsApp';
 import { useNavigate } from 'react-router-dom';
 import { useFunnels } from '../../../hooks/useFunnels';
 import { useFunnelStages } from '../../../hooks/useFunnelStages';
+import KanbanDealModal from '../../home/components/KanbanDealModal';
 
 interface Props {
   conversation: WaConversation | null;
@@ -49,11 +50,15 @@ export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [updatingStage, setUpdatingStage] = useState(false);
+  
+  // Estado para o modal de criação de deal
+  const [isDealModalOpen, setIsDealModalOpen] = useState(false);
+  const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
 
-  const { funnels } = useFunnels();
-  const { stages, reloadStages } = useFunnelStages(activeDeal?.funnel_id);
+  const { funnels, selectedFunnelId } = useFunnels();
+  const { stages } = useFunnelStages(activeDeal?.funnel_id || selectedFunnelId);
 
-  useEffect(() => {
+  const loadData = async () => {
     if (!conversation?.client_id) { 
       setClient(null); 
       setInteractions([]); 
@@ -61,24 +66,35 @@ export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
       return; 
     }
     setLoading(true);
-    Promise.all([
-      supabase.from('clients').select('id,name,phone,platform,category,capture_source,gmv_geral,chave_pix,notes,created_at')
-        .eq('id', conversation.client_id).single(),
-      supabase.from('interactions').select('id,type,title,date')
-        .eq('client_id', conversation.client_id).order('date', { ascending: false }).limit(5),
-      supabase.from('deals').select('id,title,stage,funnel_id')
-        .eq('client_id', conversation.client_id)
-        .not('stage', 'in', '("won","lost")')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-    ]).then(([clientRes, intRes, dealRes]) => {
+    try {
+      const [clientRes, intRes, dealRes, usersRes] = await Promise.all([
+        supabase.from('clients').select('id,name,phone,platform,category,capture_source,gmv_geral,chave_pix,notes,created_at')
+          .eq('id', conversation.client_id).single(),
+        supabase.from('interactions').select('id,type,title,date')
+          .eq('client_id', conversation.client_id).order('date', { ascending: false }).limit(5),
+        supabase.from('deals').select('id,title,stage,funnel_id')
+          .eq('client_id', conversation.client_id)
+          .not('stage', 'in', '("won","lost")')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase.from('user_profiles').select('id, full_name').eq('is_active', true).order('full_name')
+      ]);
+
       setClient(clientRes.data);
       setNoteText(clientRes.data?.notes || '');
       setInteractions(intRes.data || []);
       setActiveDeal(dealRes.data);
+      setUsers(usersRes.data || []);
+    } catch (error) {
+      console.error('Erro ao carregar dados da sidebar:', error);
+    } finally {
       setLoading(false);
-    });
+    }
+  };
+
+  useEffect(() => {
+    loadData();
   }, [conversation?.client_id]);
 
   const handleSaveNote = async () => {
@@ -210,7 +226,7 @@ export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
                     <div className="py-1">
                       <p className="text-[10px] text-gray-500 italic">Nenhum acompanhamento ativo para este creator.</p>
                       <button 
-                        onClick={() => navigate('/kanban')}
+                        onClick={() => setIsDealModalOpen(true)}
                         className="mt-2 text-[10px] font-bold text-emerald-600 hover:underline flex items-center gap-1"
                       >
                         <i className="ri-add-circle-line"></i> Criar no Kanban
@@ -317,6 +333,21 @@ export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
             <i className="ri-user-add-line text-sm"></i>Vincular Creator
           </button>
         </div>
+      )}
+
+      {/* Modal de Criação de Deal */}
+      {isDealModalOpen && client && (
+        <KanbanDealModal
+          isOpen={isDealModalOpen}
+          onClose={() => setIsDealModalOpen(false)}
+          deal={null}
+          clients={[{ id: client.id, name: client.name }]}
+          users={users}
+          stages={stages}
+          onSave={() => {}} // O modal já salva no banco internamente
+          onClientsUpdated={loadData}
+          currentFunnelId={selectedFunnelId || ''}
+        />
       )}
     </div>
   );
