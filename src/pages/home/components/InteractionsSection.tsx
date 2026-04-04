@@ -119,7 +119,7 @@ export default function InteractionsSection() {
     setFormData({ client_id: '', type: interactionTypes[0]?.name || 'other', title: '', description: '', date: new Date().toISOString().split('T')[0] });
     setIsModalOpen(true);
     setFilters({ ...filters, searchTerm: '' });
-  };   setFilters({ ...filters, searchTerm: '' });};
+  };
 
   const handleViewInteraction = (interaction: Interaction) => {
     setSelectedInteraction(interaction);
