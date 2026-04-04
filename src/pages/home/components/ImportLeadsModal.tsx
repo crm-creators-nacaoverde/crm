@@ -245,26 +245,41 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
       const phone = row[phoneCol]?.trim();
       if (!name || !phone) { errors++; continue; }
 
-      // Verificar duplicata por telefone
-      const { data: existing } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('phone', phone)
-        .maybeSingle();
+      // Verificar duplicata por telefone OU e-mail
+      const emailCol = Object.entries(mapping).find(([, v]) => v === \'email\')?.[0] || \'\';
+      const email = row[emailCol]?.trim();
+
+      let existing;
+      if (phone) {
+        const { data } = await supabase
+          .from(\'clients\')
+          .select(\'id\')
+          .eq(\'phone\', phone)
+          .maybeSingle();
+        existing = data;
+      }
+
+      if (!existing && email) {
+        const { data } = await supabase
+          .from(\'clients\')
+          .select(\'id\')
+          .eq(\'email\', email)
+          .maybeSingle();
+        existing = data;
+      }
 
       if (existing) {
         if (duplicateMode === 'ignore') { duplicates++; continue; }
-        if (duplicateMode === 'update') {
-          const updateData: Record<string, unknown> = { name, updated_at: new Date().toISOString() };
+        if (duplicateMode === \'update\') {
+          const updateData: Record<string, unknown> = { name, email, updated_at: new Date().toISOString() };
           Object.entries(mapping).forEach(([col, field]) => {
-            if (field !== '__ignore__' && field !== 'name' && field !== 'phone' && !field.startsWith('deal_') && field !== 'tiktok_main')
+            if (field !== \'__ignore__\' && field !== \'name\' && field !== \'phone\' && field !== \'email\' && !field.startsWith(\'deal_\') && field !== \'tiktok_main\')
               updateData[field] = row[col] || null;
           });
-          await supabase.from('clients').update(updateData).eq('id', existing.id);
+          await supabase.from(\'clients\').update(updateData).eq(\'id\', existing.id);
           duplicates++;
           continue;
-        }
-        // 'allow' — cria mesmo assim (cai no insert abaixo)
+        }ow' — cria mesmo assim (cai no insert abaixo)
       }
 
       // Montar client
@@ -595,9 +610,9 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Comportamento com duplicatas</label>
                 <div className="grid grid-cols-3 gap-2">
                   {([
-                    { id: 'ignore', label: 'Ignorar',    icon: 'ri-skip-forward-line',  desc: 'Pula linhas com telefone já cadastrado' },
+                    { id: 'ignore', label: 'Ignorar',    icon: 'ri-skip-forward-line',  desc: 'Pula linhas com telefone ou e-mail já cadastrado' },
                     { id: 'update', label: 'Atualizar',  icon: 'ri-refresh-line',        desc: 'Atualiza o creator existente com os novos dados' },
-                    { id: 'allow',  label: 'Permitir',   icon: 'ri-add-circle-line',     desc: 'Cria mesmo que o telefone já exista' },
+                    { id: 'allow',  label: 'Permitir',   icon: 'ri-add-circle-line',     desc: 'Cria mesmo que o contato já exista' },
                   ] as const).map(opt => (
                     <button key={opt.id} type="button"
                       onClick={() => setDuplicateMode(opt.id)}
