@@ -62,14 +62,15 @@ export default function InteractionsSection() {
   const filteredInteractions = interactions.filter(interaction => {
     const clientName = interaction.client?.name || '';
     const matchesSearch = clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         interaction.title.toLowerCase().includes(searchTerm.toLowerCase());
+                         interaction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (interaction.description || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === 'all' || interaction.type === filterType;
     return matchesSearch && matchesType;
   });
 
   const handleAddInteraction = () => {
     setSelectedInteraction(null);
-    setFormData({ client_id: '', type: interactionTypes[0]?.name || '', title: '', description: '', date: new Date().toISOString().split('T')[0] });
+    setFormData({ client_id: '', type: interactionTypes[0]?.name || 'other', title: '', description: '', date: new Date().toISOString().split('T')[0] });
     setIsModalOpen(true);
   };
 
@@ -153,12 +154,10 @@ export default function InteractionsSection() {
   };
 
   const getTypeConfig = (type: string) => {
-    // Buscar nos tipos dinâmicos do banco
     const found = interactionTypes.find(t => t.name === type || t.id === type);
     if (found) {
       return { icon: found.icon, bg: `bg-gray-50`, text: `text-gray-700`, label: found.name, color: found.color };
     }
-    // Fallback para tipos legados
     const fallback: Record<string, { icon: string; bg: string; text: string; label: string; color: string }> = {
       meeting:  { icon: 'ri-calendar-event-line', bg: 'bg-sky-50',    text: 'text-sky-600',    label: 'Reunião',   color: '#0891b2' },
       email:    { icon: 'ri-mail-line',            bg: 'bg-violet-50', text: 'text-violet-600', label: 'Email',     color: '#7c3aed' },
@@ -168,11 +167,6 @@ export default function InteractionsSection() {
     };
     return fallback[type] || fallback.other;
   };
-
-  const typeFilters = [
-    { value: 'all', label: 'Todos' },
-    ...interactionTypes.map(t => ({ value: t.name, label: t.name })),
-  ];
 
   const totalByType = interactions.reduce((acc, i) => {
     acc[i.type] = (acc[i.type] || 0) + 1;
@@ -188,224 +182,275 @@ export default function InteractionsSection() {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3">
-          <div className="w-9 h-9 bg-brand-50 rounded-lg flex items-center justify-center">
-            <i className="ri-message-3-line text-brand-600 text-base"></i>
+    <div className="max-w-6xl mx-auto space-y-8 pb-12">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Histórico de Interações</h1>
+          <p className="text-sm text-gray-500 mt-1">Acompanhe todas as comunicações e eventos registrados no CRM.</p>
+        </div>
+        {canEdit && (
+          <Button onClick={handleAddInteraction} size="lg" className="shadow-lg shadow-brand-500/20">
+            <i className="ri-add-line mr-2"></i>
+            Nova Interação
+          </Button>
+        )}
+      </div>
+
+      {/* Stats Cards - Interactive */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <button 
+          onClick={() => setFilterType('all')}
+          className={`bg-white rounded-2xl border p-5 flex flex-col items-start gap-3 transition-all text-left group ${filterType === 'all' ? 'border-brand-500 ring-4 ring-brand-500/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'}`}
+        >
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${filterType === 'all' ? 'bg-brand-500 text-white' : 'bg-gray-50 text-gray-400 group-hover:bg-gray-100'}`}>
+            <i className="ri-message-3-line text-xl"></i>
           </div>
           <div>
-            <p className="text-lg font-bold text-gray-900">{interactions.length}</p>
-            <p className="text-[11px] text-gray-400">Total</p>
+            <p className="text-2xl font-bold text-gray-900">{interactions.length}</p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total</p>
           </div>
-        </div>
+        </button>
+
         {['meeting', 'email', 'call', 'whatsapp'].map(type => {
           const cfg = getTypeConfig(type);
+          const isActive = filterType === type;
           return (
-            <div key={type} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-3">
-              <div className={`w-9 h-9 ${cfg.bg} rounded-lg flex items-center justify-center`}>
-                <i className={`${cfg.icon} ${cfg.text} text-base`}></i>
+            <button 
+              key={type}
+              onClick={() => setFilterType(type)}
+              className={`bg-white rounded-2xl border p-5 flex flex-col items-start gap-3 transition-all text-left group ${isActive ? 'border-brand-500 ring-4 ring-brand-500/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'}`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${isActive ? 'text-white' : `${cfg.text} ${cfg.bg} group-hover:opacity-80`}`} style={isActive ? { backgroundColor: cfg.color } : {}}>
+                <i className={`${cfg.icon} text-xl`}></i>
               </div>
               <div>
-                <p className="text-lg font-bold text-gray-900">{totalByType[type] || 0}</p>
-                <p className="text-[11px] text-gray-400">{cfg.label}</p>
+                <p className="text-2xl font-bold text-gray-900">{totalByType[type] || 0}</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">{cfg.label}</p>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
 
-      {/* Toolbar */}
-      <div className="bg-white rounded-xl border border-gray-100 p-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+      {/* Search and Category Bar */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-2 shadow-sm">
+        <div className="flex flex-col md:flex-row items-center gap-2">
           <div className="relative flex-1 w-full">
-            <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+            <i className="ri-search-line absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg"></i>
             <input
               type="text"
-              placeholder="Buscar por cliente ou título..."
+              placeholder="Buscar por creator, título ou descrição..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 bg-gray-50/50"
+              className="w-full pl-12 pr-4 py-3 text-sm border-none focus:ring-0 bg-transparent placeholder:text-gray-400"
             />
           </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-            <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-              {typeFilters.map((type) => (
-                <button
-                  key={type.value}
-                  onClick={() => setFilterType(type.value)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap cursor-pointer transition-all ${
-                    filterType === type.value
-                      ? 'bg-white shadow-sm text-gray-900'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {type.label}
-                </button>
-              ))}
-            </div>
-            {canEdit && (
-              <Button onClick={handleAddInteraction} size="md">
-                <i className="ri-add-line text-sm"></i>
-                <span className="hidden sm:inline">Nova</span>
-              </Button>
-            )}
+          <div className="h-8 w-px bg-gray-100 hidden md:block"></div>
+          <div className="flex items-center gap-1 p-1 overflow-x-auto w-full md:w-auto no-scrollbar">
+            <button
+              onClick={() => setFilterType('all')}
+              className={`px-4 py-2 text-xs font-semibold rounded-xl whitespace-nowrap transition-all ${filterType === 'all' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+            >
+              Todos
+            </button>
+            {interactionTypes.map((type) => (
+              <button
+                key={type.id}
+                onClick={() => setFilterType(type.name)}
+                className={`px-4 py-2 text-xs font-semibold rounded-xl whitespace-nowrap transition-all ${filterType === type.name ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                {type.name}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* List */}
-      <div className="space-y-2">
-        {filteredInteractions.map((interaction) => {
-          const cfg = getTypeConfig(interaction.type);
-          return (
-            <div
-              key={interaction.id}
-              className="bg-white rounded-xl border border-gray-100 p-4 hover:border-gray-200 hover:shadow-sm transition-all cursor-pointer group"
-              onClick={() => handleViewInteraction(interaction)}
-            >
-              <div className="flex items-start gap-4">
-                <div className={`w-10 h-10 flex items-center justify-center rounded-xl ${cfg.bg} ${cfg.text}`}>
-                  <i className={`${cfg.icon} text-lg`}></i>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-4 mb-1">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-medium text-gray-900">{interaction.title}</h3>
-                      <p className="text-xs text-gray-400 mt-0.5">{interaction.client?.name || 'Cliente não encontrado'}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-medium text-gray-700">
-                          {new Date(interaction.date).toLocaleDateString('pt-BR')}
-                        </p>
-                        <p className="text-[11px] text-gray-400">
-                          {new Date(interaction.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
+      {/* Timeline List */}
+      <div className="relative">
+        {/* Vertical Line */}
+        <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-100 hidden sm:block"></div>
+
+        <div className="space-y-6">
+          {filteredInteractions.map((interaction, index) => {
+            const cfg = getTypeConfig(interaction.type);
+            const date = new Date(interaction.date);
+            
+            return (
+              <div key={interaction.id} className="relative pl-0 sm:pl-14 group">
+                {/* Timeline Dot */}
+                <div className="absolute left-4 top-5 w-4 h-4 rounded-full border-4 border-white shadow-sm z-10 hidden sm:block transition-transform group-hover:scale-125" style={{ backgroundColor: cfg.color }}></div>
+                
+                <div 
+                  className="bg-white rounded-2xl border border-gray-100 p-5 hover:border-brand-200 hover:shadow-xl hover:shadow-brand-500/5 transition-all cursor-pointer"
+                  onClick={() => handleViewInteraction(interaction)}
+                >
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <div className={`w-12 h-12 flex-shrink-0 flex items-center justify-center rounded-2xl ${cfg.bg} ${cfg.text}`}>
+                        <i className={`${cfg.icon} text-2xl`}></i>
                       </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-base font-bold text-gray-900 truncate">{interaction.title}</h3>
+                          <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md ${cfg.bg} ${cfg.text}`}>
+                            {cfg.label}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <i className="ri-user-star-line text-brand-500"></i>
+                          <span className="font-medium text-gray-700">{interaction.client?.name || 'Creator não identificado'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between md:flex-col md:items-end gap-2">
+                      <div className="flex items-center gap-2 text-gray-400">
+                        <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg">
+                          <i className="ri-calendar-line text-xs"></i>
+                          <span className="text-xs font-semibold">{date.toLocaleDateString('pt-BR')}</span>
+                        </div>
+                        <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg">
+                          <i className="ri-time-line text-xs"></i>
+                          <span className="text-xs font-semibold">{date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                      
                       {canDelete && (
                         <button
                           onClick={(e) => { e.stopPropagation(); setDeleteConfirm(interaction.id); }}
-                          className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all cursor-pointer opacity-0 group-hover:opacity-100"
-                          title="Excluir"
+                          className="w-9 h-9 flex items-center justify-center text-gray-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                         >
-                          <i className="ri-delete-bin-line text-sm"></i>
+                          <i className="ri-delete-bin-line text-lg"></i>
                         </button>
                       )}
                     </div>
                   </div>
+
                   {interaction.description && (
-                    <p className="text-xs text-gray-500 line-clamp-1 mt-1">{interaction.description}</p>
+                    <div className="mt-4 p-4 bg-gray-50/50 rounded-xl border border-gray-100/50">
+                      <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap line-clamp-3">
+                        {interaction.description}
+                      </p>
+                    </div>
                   )}
-                  <div className="mt-2.5">
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-medium rounded-md ${cfg.bg} ${cfg.text}`}>
-                      <i className={`${cfg.icon} text-[10px]`}></i>
-                      {cfg.label}
-                    </span>
-                  </div>
                 </div>
               </div>
+            );
+          })}
+        </div>
+
+        {filteredInteractions.length === 0 && (
+          <div className="bg-white rounded-3xl border border-dashed border-gray-200 text-center py-24">
+            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <i className="ri-chat-history-line text-4xl text-gray-200"></i>
             </div>
-          );
-        })}
+            <h3 className="text-lg font-bold text-gray-900">Nenhuma interação encontrada</h3>
+            <p className="text-sm text-gray-500 mt-2 max-w-xs mx-auto">Tente ajustar seus filtros ou faça uma nova busca para encontrar o que procura.</p>
+            <Button variant="outline" onClick={() => { setFilterType('all'); setSearchTerm(''); }} className="mt-6">
+              Limpar Filtros
+            </Button>
+          </div>
+        )}
       </div>
 
-      {filteredInteractions.length === 0 && (
-        <div className="bg-white rounded-xl border border-gray-100 text-center py-16">
-          <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <i className="ri-chat-off-line text-2xl text-gray-300"></i>
-          </div>
-          <p className="text-sm text-gray-400">Nenhuma interação encontrada</p>
-        </div>
-      )}
-
+      {/* Modals and Confirmation (Keep existing logic but improve UI) */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={selectedInteraction ? 'Detalhes da Interação' : 'Nova Interação'}
-        subtitle={selectedInteraction ? 'Visualização dos dados' : 'Registre uma nova comunicação'}
+        width="max-w-xl"
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Cliente</label>
-            <select
-              value={formData.client_id}
-              onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 cursor-pointer"
-              required
-              disabled={!!selectedInteraction}
-            >
-              <option value="">Selecione um cliente</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>{client.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Tipo</label>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Creator / Cliente</label>
               <select
-                value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 cursor-pointer"
+                value={formData.client_id}
+                onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+                className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 bg-gray-50/50 transition-all"
+                required
                 disabled={!!selectedInteraction}
               >
-                {interactionTypes.map(t => (
-                  <option key={t.id} value={t.name}>{t.name}</option>
+                <option value="">Selecione um creator</option>
+                {clients.map((client) => (
+                  <option key={client.id} value={client.id}>{client.name}</option>
                 ))}
-                <option value="other">Outro</option>
               </select>
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Tipo de Contato</label>
+                <select
+                  value={formData.type}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                  className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 bg-gray-50/50 transition-all"
+                  disabled={!!selectedInteraction}
+                >
+                  {interactionTypes.map(t => (
+                    <option key={t.id} value={t.name}>{t.name}</option>
+                  ))}
+                  <option value="other">Outro</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Data do Evento</label>
+                <Input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  required
+                  disabled={!!selectedInteraction}
+                  className="!py-3 !rounded-xl"
+                />
+              </div>
+            </div>
+
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Data</label>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Título / Assunto</label>
               <Input
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                type="text"
+                placeholder="Ex: Reunião de alinhamento, Envio de contrato..."
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 required
+                disabled={!!selectedInteraction}
+                className="!py-3 !rounded-xl"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Notas e Observações</label>
+              <textarea
+                placeholder="Descreva o que foi conversado ou o resultado desta interação..."
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={5}
+                className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:ring-4 focus:ring-brand-500/10 focus:border-brand-500 bg-gray-50/50 transition-all resize-none"
                 disabled={!!selectedInteraction}
               />
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Título</label>
-            <Input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              required
-              disabled={!!selectedInteraction}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Descrição</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value.slice(0, 500) })}
-              rows={4}
-              maxLength={500}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 resize-none"
-              disabled={!!selectedInteraction}
-            />
-          </div>
-          <div className="flex gap-3 pt-4 border-t border-gray-100">
+
+          <div className="flex gap-3 pt-6 border-t border-gray-100">
             {selectedInteraction && canDelete && (
               <button
                 type="button"
                 onClick={() => setDeleteConfirm(selectedInteraction.id)}
-                className="px-4 py-2.5 text-sm font-medium text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100 transition-colors cursor-pointer whitespace-nowrap"
+                className="px-5 py-3 text-sm font-bold text-rose-600 bg-rose-50 rounded-xl hover:bg-rose-100 transition-all"
               >
-                <i className="ri-delete-bin-line mr-1"></i>
+                <i className="ri-delete-bin-line mr-2"></i>
                 Excluir
               </button>
             )}
-            <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="flex-1">
+            <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="flex-1 !py-3 !rounded-xl">
               {selectedInteraction ? 'Fechar' : 'Cancelar'}
             </Button>
             {!selectedInteraction && (
-              <Button type="submit" className="flex-1">
-                Adicionar Interação
+              <Button type="submit" className="flex-1 !py-3 !rounded-xl shadow-lg shadow-brand-500/20">
+                Salvar Interação
               </Button>
             )}
           </div>
@@ -414,26 +459,26 @@ export default function InteractionsSection() {
 
       {/* Delete Confirmation */}
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)}></div>
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-[fadeIn_0.2s_ease-out]">
-            <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <i className="ri-delete-bin-line text-2xl text-rose-500"></i>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)}></div>
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 animate-[fadeIn_0.2s_ease-out]">
+            <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <i className="ri-delete-bin-line text-3xl text-rose-500"></i>
             </div>
-            <h3 className="text-base font-semibold text-gray-900 text-center mb-1">Excluir Interação</h3>
-            <p className="text-sm text-gray-500 text-center mb-5">Tem certeza? Esta ação não pode ser desfeita.</p>
+            <h3 className="text-xl font-bold text-gray-900 text-center mb-2">Excluir Interação?</h3>
+            <p className="text-sm text-gray-500 text-center mb-8">Esta ação é permanente e removerá este registro do histórico do creator.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer whitespace-nowrap"
+                className="flex-1 px-4 py-3 text-sm font-bold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => handleDeleteInteraction(deleteConfirm)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 transition-colors cursor-pointer whitespace-nowrap"
+                className="flex-1 px-4 py-3 text-sm font-bold text-white bg-rose-600 rounded-xl hover:bg-rose-700 transition-all shadow-lg shadow-rose-600/20"
               >
-                Excluir
+                Sim, Excluir
               </button>
             </div>
           </div>
