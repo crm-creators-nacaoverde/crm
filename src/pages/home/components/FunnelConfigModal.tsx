@@ -135,20 +135,20 @@ export default function FunnelConfigModal({
 
   const removeStage = (id: string) => {
     if (editStages.length <= 3) return;
-    if (id === 'won' || id === 'lost') return;
+    if (id === 'won' || id === 'lost' || id.startsWith('won_') || id.startsWith('lost_')) return;
     setEditStages(prev => prev.filter(s => s.id !== id));
     setHasChanges(true);
   };
 
   const handleDragStart = (index: number) => {
     const stage = editStages[index];
-    if (stage.id === 'won' || stage.id === 'lost') return;
+    if (stage.id === 'won' || stage.id === 'lost' || stage.id.startsWith('won_') || stage.id.startsWith('lost_')) return;
     setDragIndex(index);
   };
   const handleDragOver = (index: number) => {
     if (dragIndex === null) return;
     const targetStage = editStages[index];
-    if (targetStage.id === 'won' || targetStage.id === 'lost') return;
+    if (targetStage.id === 'won' || targetStage.id === 'lost' || targetStage.id.startsWith('won_') || targetStage.id.startsWith('lost_')) return;
     setDragOverIndex(index);
   };
   const handleDrop = (index: number) => {
@@ -156,7 +156,7 @@ export default function FunnelConfigModal({
       setDragIndex(null); setDragOverIndex(null); return;
     }
     const targetStage = editStages[index];
-    if (targetStage.id === 'won' || targetStage.id === 'lost') {
+    if (targetStage.id === 'won' || targetStage.id === 'lost' || targetStage.id.startsWith('won_') || targetStage.id.startsWith('lost_')) {
       setDragIndex(null); setDragOverIndex(null); return;
     }
     const newStages = [...editStages];
@@ -178,8 +178,8 @@ export default function FunnelConfigModal({
     onClose();
   };
 
-  const wonStage = editStages.find(s => s.id === 'won' || s.label.toLowerCase() === 'ganho');
-  const lostStage = editStages.find(s => s.id === 'lost' || s.label.toLowerCase() === 'perdido');
+  const wonStage = editStages.find(s => s.id === 'won' || s.id.startsWith('won_'));
+  const lostStage = editStages.find(s => s.id === 'lost' || s.id.startsWith('lost_'));
   const pipelineStages = editStages.filter(s => s.id !== wonStage?.id && s.id !== lostStage?.id);
 
 

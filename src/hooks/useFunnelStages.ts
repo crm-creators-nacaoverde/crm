@@ -94,16 +94,25 @@ export function useFunnelStages(funnelId?: string) {
       }
 
       // Upsert all stages
-      const upsertData = newStages.map((s, index) => ({
-        id: s.id,
-        label: s.label,
-        color: s.color,
-        sort_order: index,
-        is_fixed: s.id === 'won' || s.id === 'lost',
-        funnel_id: funnelId || s.funnel_id,
-        description: s.description ?? null,
-        updated_at: new Date().toISOString(),
-      }));
+      const upsertData = newStages.map((s, index) => {
+        // Garantir que etapas finais tenham IDs únicos por funil se o funnelId estiver presente
+        let finalId = s.id;
+        if (funnelId && (s.id === 'won' || s.id === 'lost' || s.id.startsWith('won_') || s.id.startsWith('lost_'))) {
+          const base = s.id.includes('_') ? s.id.split('_')[0] : s.id;
+          finalId = `${base}_${funnelId}`;
+        }
+
+        return {
+          id: finalId,
+          label: s.label,
+          color: s.color,
+          sort_order: index,
+          is_fixed: s.id === 'won' || s.id === 'lost' || s.id.startsWith('won_') || s.id.startsWith('lost_'),
+          funnel_id: funnelId || s.funnel_id,
+          description: s.description ?? null,
+          updated_at: new Date().toISOString(),
+        };
+      });
 
       const { error: upsertError } = await supabase
         .from('funnel_stages')

@@ -106,6 +106,15 @@ export function useFunnels() {
 
       if (error) throw error;
 
+      // Criar etapas padrão para o novo funil
+      const defaultStages = [
+        { id: `stage_1_${data.id}`, label: 'Primeira etapa', color: '#38bdf8', sort_order: 0, funnel_id: data.id, is_fixed: false },
+        { id: `won_${data.id}`, label: 'Ganho', color: '#34d399', sort_order: 1, funnel_id: data.id, is_fixed: true },
+        { id: `lost_${data.id}`, label: 'Perdido', color: '#f87171', sort_order: 2, funnel_id: data.id, is_fixed: true },
+      ];
+
+      await supabase.from('funnel_stages').insert(defaultStages);
+
       await loadFunnels();
       return { success: true, data };
     } catch (err) {
