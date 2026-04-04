@@ -16,8 +16,8 @@ interface KanbanToolbarProps {
   onSortByChange: (value: string) => void;
   users: UserOption[];
   totalDeals: number;
-  totalValue: number;
-  avgTicket: number;
+  wonDeals: number;
+  lostDeals: number;
   onCreateDeal: () => void;
   onExport: () => void;
   onReload: () => void;
@@ -50,8 +50,8 @@ export default function KanbanToolbar({
   onSortByChange,
   users,
   totalDeals,
-  totalValue,
-  avgTicket,
+  wonDeals,
+  lostDeals,
   onCreateDeal,
   onExport,
   onReload,
@@ -88,34 +88,23 @@ export default function KanbanToolbar({
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center">
-              <i className="ri-money-dollar-circle-line text-emerald-600 text-base"></i>
+              <i className="ri-checkbox-circle-line text-emerald-600 text-base"></i>
             </div>
             <div>
-              <p className="text-lg font-bold text-gray-900">
-                R${' '}
-                {totalValue.toLocaleString('pt-BR', {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                })}
-              </p>
-              <p className="text-[11px] text-gray-400">Valor total</p>
+              <p className="text-lg font-bold text-gray-900">{wonDeals}</p>
+              <p className="text-[11px] text-gray-400">Ganhos</p>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-amber-50 rounded-lg flex items-center justify-center">
-              <i className="ri-trophy-line text-amber-600 text-base"></i>
+            <div className="w-9 h-9 bg-rose-50 rounded-lg flex items-center justify-center">
+              <i className="ri-close-circle-line text-rose-600 text-base"></i>
             </div>
             <div>
-              <p className="text-lg font-bold text-gray-900">
-                R${' '}
-                {totalDeals > 0
-                  ? Math.round(totalValue / totalDeals).toLocaleString('pt-BR')
-                  : '0'}
-              </p>
-              <p className="text-[11px] text-gray-400">Ticket médio</p>
+              <p className="text-lg font-bold text-gray-900">{lostDeals}</p>
+              <p className="text-[11px] text-gray-400">Perdidos</p>
             </div>
           </div>
         </div>

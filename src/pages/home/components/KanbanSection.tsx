@@ -436,9 +436,12 @@ export default function KanbanSection() {
 
   const getStageDeals = (stageId: string) => sortedDeals.filter(d => d.stage === stageId);
 
-  const getTotalValue = () => deals.reduce((sum, d) => sum + Number(d.value ?? 0), 0);
   const getStageValue = (stageId: string) =>
     getStageDeals(stageId).reduce((sum, d) => sum + Number(d.value ?? 0), 0);
+
+  const totalDealsCount = filteredDealsByFunnel.filter(d => d.stage !== 'won' && d.stage !== 'lost').length;
+  const wonDealsCount = filteredDealsByFunnel.filter(d => d.stage === 'won').length;
+  const lostDealsCount = filteredDealsByFunnel.filter(d => d.stage === 'lost').length;
 
   if (loading || stagesLoading || funnelsLoading) {
     return (
@@ -464,9 +467,9 @@ export default function KanbanSection() {
         sortBy={sortBy}
         onSortByChange={setSortBy}
         users={users}
-        totalDeals={filteredDeals.length}
-        totalValue={getTotalValue()}
-        avgTicket={filteredDeals.length > 0 ? Math.round(getTotalValue() / filteredDeals.length) : 0}
+        totalDeals={totalDealsCount}
+        wonDeals={wonDealsCount}
+        lostDeals={lostDealsCount}
         filterCategory={'all'}
         onFilterCategoryChange={() => {}}
         categoryOptions={[]}
