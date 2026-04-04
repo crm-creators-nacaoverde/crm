@@ -5,6 +5,8 @@ import Button from '../../../components/base/Button';
 import { supabase } from '../../../lib/supabase';
 import { Deal, ClientOption, UserOption } from './KanbanSection';
 import SendFormFromDealModal from './SendFormFromDealModal';
+import { useFunnels } from '../../../hooks/useFunnels';
+import { useAuth } from '../../../contexts/AuthContext';
 
 interface KanbanDealModalProps {
   isOpen: boolean;
@@ -44,18 +46,27 @@ export default function KanbanDealModal({
   deal,
   clients,
   users,
-  stages,
+  stages: initialStages,
   onSave,
   onClientsUpdated,
   currentFunnelId,
 }: KanbanDealModalProps) {
+  const { user } = useAuth();
+  const { funnels } = useFunnels();
+  
+  // Filtrar funis permitidos para o usuário
+  const allowedFunnels = funnels.filter(f => {
+    if (!f.allowed_user_ids || f.allowed_user_ids.length === 0) return true;
+    return f.allowed_user_ids.includes(user?.id || '');
+  });
+
   const [formData, setFormData] = useState<FormData>({
     title: '',
     client_id: '',
     assigned_to: '',
     supervisor_id: '',
     value: '',
-    stage: stages[0]?.id || '',
+    stage: '',
     description: '',
     expected_close_date: '',
     priority: 'medium',
@@ -69,7 +80,10 @@ export default function KanbanDealModal({
   const [isSendFormModalOpen, setIsSendFormModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [currentStages, setCurrentStages] = useState(initialStages);
+  const [loadingStages, setLoadingStages] = useState(false);
 
+  // Carregar categorias
   useEffect(() => {
     supabase.from('creator_categories').select('id, name').eq('is_active', true).order('sort_order')
       .then(({ data }) => {
@@ -77,6 +91,37 @@ export default function KanbanDealModal({
       });
   }, []);
 
+  // Carregar estágios quando o funil mudar
+  useEffect(() => {
+    if (!formData.funnel_id) return;
+    
+    // Se for o funil atual, usa os estágios passados via props
+    if (formData.funnel_id === currentFunnelId) {
+      setCurrentStages(initialStages);
+      if (!deal && !formData.stage) {
+        setFormData(prev => ({ ...prev, stage: initialStages[0]?.id || '' }));
+      }
+      return;
+    }
+
+    setLoadingStages(true);
+    supabase.from('funnel_stages')
+      .select('id, label, color')
+      .eq('funnel_id', formData.funnel_id)
+      .order('sort_order')
+      .then(({ data }) => {
+        if (data) {
+          setCurrentStages(data);
+          // Se estiver criando novo, seleciona o primeiro estágio do novo funil
+          if (!deal) {
+            setFormData(prev => ({ ...prev, stage: data[0]?.id || '' }));
+          }
+        }
+        setLoadingStages(false);
+      });
+  }, [formData.funnel_id, currentFunnelId, initialStages, deal]);
+
+  // Inicializar formulário
   useEffect(() => {
     if (deal) {
       setFormData({
@@ -93,10 +138,12 @@ export default function KanbanDealModal({
         funnel_id: deal.funnel_id || currentFunnelId,
       });
       
-      // Extrair categoria do título se existir
+      // Tentar extrair categoria do título (formato: Nome #Categoria)
       const match = deal.title.match(/#(.+)$/);
       if (match) {
-        setSelectedCategory(match[1]);
+        const catName = match[1];
+        const cat = categories.find(c => c.name === catName);
+        if (cat) setSelectedCategory(cat.id);
       }
     } else {
       setFormData({
@@ -105,7 +152,7 @@ export default function KanbanDealModal({
         assigned_to: '',
         supervisor_id: '',
         value: '',
-        stage: stages[0]?.id || '',
+        stage: currentStages[0]?.id || '',
         description: '',
         expected_close_date: '',
         priority: 'medium',
@@ -114,7 +161,7 @@ export default function KanbanDealModal({
       });
       setSelectedCategory('');
     }
-  }, [deal, stages, currentFunnelId]);
+  }, [deal, currentFunnelId, categories]);
 
   // Atualizar título automaticamente quando cliente ou categoria mudar
   useEffect(() => {
@@ -124,16 +171,16 @@ export default function KanbanDealModal({
       if (selectedClient && category) {
         setFormData(prev => ({
           ...prev,
-          title: `${selectedClient.name} #${category.id} - ${category.name}`
+          title: `${selectedClient.name} #${category.name}`
         }));
       }
     }
-  }, [formData.client_id, selectedCategory, clients, deal]);
+  }, [formData.client_id, selectedCategory, clients, deal, categories]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.client_id || !selectedCategory) {
+    if (!formData.client_id || !selectedCategory || !formData.funnel_id) {
       alert('Preencha todos os campos obrigatórios');
       return;
     }
@@ -178,7 +225,6 @@ export default function KanbanDealModal({
         });
       }
 
-      // Recarregar dados antes de fechar
       await onClientsUpdated();
       onClose();
     } catch (error) {
@@ -281,7 +327,7 @@ export default function KanbanDealModal({
             >
               <option value="">Selecione uma categoria</option>
               {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>#{cat.id} - {cat.name}</option>
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
           </div>
@@ -293,66 +339,92 @@ export default function KanbanDealModal({
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Etapa</label>
-            <select
-              value={formData.stage}
-              onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            >
-              {stages.map(stage => (
-                <option key={stage.id} value={stage.id}>{stage.label}</option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Funil *</label>
+              <select
+                value={formData.funnel_id}
+                onChange={(e) => setFormData({ ...formData, funnel_id: e.target.value, stage: '' })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                required
+              >
+                {allowedFunnels.map(funnel => (
+                  <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Etapa *</label>
+              <select
+                value={formData.stage}
+                onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                required
+                disabled={loadingStages}
+              >
+                {loadingStages ? (
+                  <option>Carregando...</option>
+                ) : (
+                  currentStages.map(stage => (
+                    <option key={stage.id} value={stage.id}>{stage.label}</option>
+                  ))
+                )}
+              </select>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Responsável</label>
-            <select
-              value={formData.assigned_to}
-              onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            >
-              <option value="">Nenhum</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>{user.full_name}</option>
-              ))}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Responsável</label>
+              <select
+                value={formData.assigned_to}
+                onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              >
+                <option value="">Nenhum</option>
+                {users.map(user => (
+                  <option key={user.id} value={user.id}>{user.full_name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor</label>
+              <select
+                value={formData.supervisor_id}
+                onChange={(e) => setFormData({ ...formData, supervisor_id: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              >
+                <option value="">Nenhum</option>
+                {users.map(user => (
+                  <option key={user.id} value={user.id}>{user.full_name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor</label>
-            <select
-              value={formData.supervisor_id}
-              onChange={(e) => setFormData({ ...formData, supervisor_id: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            >
-              <option value="">Nenhum</option>
-              {users.map(user => (
-                <option key={user.id} value={user.id}>{user.full_name}</option>
-              ))}
-            </select>
-          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Atenção</label>
+              <select
+                value={formData.priority}
+                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              >
+                <option value="low">Baixa</option>
+                <option value="medium">Média</option>
+                <option value="high">Alta</option>
+              </select>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Atenção</label>
-            <select
-              value={formData.priority}
-              onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-            >
-              <option value="low">Baixa</option>
-              <option value="medium">Média</option>
-              <option value="high">Alta</option>
-            </select>
+            <Input
+              label="Previsão de Fechamento"
+              type="date"
+              value={formData.expected_close_date}
+              onChange={(e) => setFormData({ ...formData, expected_close_date: e.target.value })}
+            />
           </div>
-
-          <Input
-            label="Previsão de Fechamento"
-            type="date"
-            value={formData.expected_close_date}
-            onChange={(e) => setFormData({ ...formData, expected_close_date: e.target.value })}
-          />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
