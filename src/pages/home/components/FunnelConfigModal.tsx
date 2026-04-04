@@ -178,9 +178,9 @@ export default function FunnelConfigModal({
     onClose();
   };
 
-  const wonStage = editStages.find(s => s.id === 'won');
-  const lostStage = editStages.find(s => s.id === 'lost');
-  const pipelineStages = editStages.filter(s => s.id !== 'won' && s.id !== 'lost');
+  const wonStage = editStages.find(s => s.id === 'won' || s.label.toLowerCase() === 'ganho');
+  const lostStage = editStages.find(s => s.id === 'lost' || s.label.toLowerCase() === 'perdido');
+  const pipelineStages = editStages.filter(s => s.id !== wonStage?.id && s.id !== lostStage?.id);
 
 
   return (
@@ -313,7 +313,30 @@ export default function FunnelConfigModal({
                     <div className="w-5 h-5 flex items-center justify-center text-gray-200">
                       <i className="ri-lock-line text-sm"></i>
                     </div>
-                    <div className="w-7 h-7 rounded-lg flex-shrink-0 border-2 border-white shadow-sm" style={{ backgroundColor: stage!.color }}></div>
+                    {/* Color picker para etapas fixas */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setEditingColor(editingColor === stage!.id ? null : stage!.id)}
+                        className="w-7 h-7 rounded-lg border-2 border-white shadow-sm cursor-pointer hover:scale-110 transition-transform flex-shrink-0"
+                        style={{ backgroundColor: stage!.color }} title="Alterar cor" />
+                      {editingColor === stage!.id && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setEditingColor(null)}></div>
+                          <div className="absolute left-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 p-3 z-20 w-[200px]">
+                            <p className="text-[11px] font-medium text-gray-500 mb-2">Escolha uma cor</p>
+                            <div className="grid grid-cols-5 gap-2">
+                              {colorOptions.map(color => (
+                                <button key={color}
+                                  onClick={() => { updateStage(stage!.id, 'color', color); setEditingColor(null); }}
+                                  className={`w-8 h-8 rounded-lg cursor-pointer hover:scale-110 transition-transform border-2
+                                    ${stage!.color === color ? 'border-gray-800 shadow-md' : 'border-transparent'}`}
+                                  style={{ backgroundColor: color }} />
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     <input type="text" value={stage!.label}
                       onChange={e => updateStage(stage!.id, 'label', e.target.value)}
                       className="flex-1 text-sm font-medium text-gray-600 bg-transparent border-none outline-none focus:bg-white rounded-lg px-2 py-1 -mx-2 transition-colors" />
