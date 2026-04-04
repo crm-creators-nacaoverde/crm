@@ -97,6 +97,21 @@ export default function KanbanOptionsMenu({
               </div>
               <span className="font-medium">Gerenciar Funis</span>
             </button>
+
+            <div className="my-1.5 mx-3 border-t border-gray-100"></div>
+
+            <button
+              onClick={() => handleAction(onToggleClosedStages)}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors"
+              type="button"
+            >
+              <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${hideClosedStages ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+                <i className={`ri-${hideClosedStages ? 'eye-line text-amber-600' : 'eye-off-line text-emerald-600'} text-base`}></i>
+              </div>
+              <span className="font-medium">
+                {hideClosedStages ? 'Mostrar Etapas Finais' : 'Ocultar Etapas Finais'}
+              </span>
+            </button>
           </div>
         </>
       )}

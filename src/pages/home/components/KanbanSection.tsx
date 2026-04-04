@@ -53,6 +53,8 @@ const HIDE_CLOSED_KEY = 'crm_kanban_hide_closed';
 function loadHideClosed(): boolean {
   try {
     const saved = localStorage.getItem(HIDE_CLOSED_KEY);
+    // Se não houver valor salvo, o padrão é FALSE (mostrar etapas finais)
+    if (saved === null) return false;
     return saved === 'true';
   } catch {
     return false;
