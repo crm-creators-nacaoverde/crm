@@ -91,7 +91,7 @@ export default function ConversationList({
                 <div className="relative flex-shrink-0">
                   <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold text-sm">
-                      {(conv.client_name || phoneDisplay(conv.remote_jid)).charAt(0).toUpperCase()}
+                      {(conv.client_name || conv.push_name || phoneDisplay(conv.remote_jid)).charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${statusColor(conv)}`}></span>
@@ -101,7 +101,7 @@ export default function ConversationList({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">
                     <p className={`text-xs font-semibold truncate ${isActive ? 'text-emerald-700' : 'text-gray-800'}`}>
-                      {conv.client_name || phoneDisplay(conv.remote_jid)}
+                      {conv.client_name || conv.push_name || phoneDisplay(conv.remote_jid)}
                     </p>
                     <span className="text-[10px] text-gray-400 flex-shrink-0 ml-1">{timeAgo(conv.last_message_at)}</span>
                   </div>

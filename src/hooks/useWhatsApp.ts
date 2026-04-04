@@ -15,6 +15,7 @@ export interface WaConversation {
   outcome_reason_id: string | null;
   funnel_id: string | null;
   stage_id: string | null;
+  push_name: string | null;
   last_message: string | null;
   last_message_at: string;
   unread_count: number;

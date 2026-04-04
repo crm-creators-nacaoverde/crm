@@ -81,12 +81,12 @@ export default function ChatWindow({
       <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 flex-shrink-0 bg-white">
         <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center flex-shrink-0">
           <span className="text-white font-semibold text-sm">
-            {(conversation.client_name || phoneDisplay).charAt(0).toUpperCase()}
+            {(conversation.client_name || conversation.push_name || phoneDisplay).charAt(0).toUpperCase()}
           </span>
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-gray-900 truncate">
-            {conversation.client_name || phoneDisplay}
+            {conversation.client_name || conversation.push_name || phoneDisplay}
           </p>
           <p className="text-[11px] text-gray-400">{phoneDisplay}</p>
         </div>
