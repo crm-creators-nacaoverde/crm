@@ -5,6 +5,7 @@ import { supabase } from '../../../lib/supabase';
 interface FormTemplate {
   id: string;
   name: string;
+  slug?: string | null;
   description: string;
   is_active: boolean;
   share_token?: string;
@@ -48,12 +49,12 @@ export default function SendFormFromDealModal({
     try {
       const { data, error } = await supabase
         .from('form_templates')
-        .select('id, name, description, is_active, share_token, fields')
+        .select('id, name, slug, description, is_active, share_token, fields')
         .eq('is_active', true)
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      setForms((data || []).filter((f: FormTemplate) => f.share_token));
+      setForms((data || []).filter((f: FormTemplate) => f.share_token || f.slug));
     } catch (err) {
       console.error('Erro ao carregar formulários:', err);
     } finally {
@@ -62,8 +63,15 @@ export default function SendFormFromDealModal({
   };
 
   const getFormUrl = (form: FormTemplate) => {
-    if (!form.share_token || !clientId) return '';
-    return `${window.location.origin}${__BASE_PATH__ || ''}/formulario/${form.share_token}?creator=${clientId}`;
+    if ((!form.share_token && !form.slug) || !clientId) return '';
+    
+    const basePath = (window as any).__BASE_PATH__ || '';
+    const cleanBase = basePath.startsWith('/') ? basePath.slice(1) : basePath;
+    const origin = window.location.origin;
+    const base = cleanBase ? `${origin}/${cleanBase}` : origin;
+    
+    const identifier = form.slug || form.share_token;
+    return `${base}/f/${identifier}?creator=${clientId}`;
   };
 
   const getWhatsAppUrl = (form: FormTemplate) => {

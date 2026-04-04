@@ -46,11 +46,12 @@ export default function FormCard({ form, onEdit, onDuplicate, onToggleActive, on
   const getFormUrl = () => {
     const basePath = (window as any).__BASE_PATH__ || '';
     const cleanBase = basePath.startsWith('/') ? basePath.slice(1) : basePath;
-    const base = `${window.location.origin}${cleanBase ? '/' + cleanBase : ''}`;
+    const origin = window.location.origin;
+    const base = cleanBase ? `${origin}/${cleanBase}` : origin;
 
-    if (form.slug) return `${base}/f/${form.slug}`;
-    if (form.share_token) return `${base}/formulario/${form.share_token}`;
-    return '';
+    const identifier = form.slug || form.share_token;
+    if (!identifier) return '';
+    return `${base}/f/${identifier}`;
   };
 
   const handleCopyLink = async () => {
