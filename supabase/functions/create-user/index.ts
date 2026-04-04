@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
 
     // Get environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseServiceKey = Deno.env.get("SERVICE_ROLE_KEY");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
