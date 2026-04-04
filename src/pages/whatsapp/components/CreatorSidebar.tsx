@@ -149,7 +149,15 @@ export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
       <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
         <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Creator</p>
         {client && (
-          <button onClick={() => navigate(`/creators?id=${client.id}`)}
+          <button 
+            onClick={() => {
+              if (activeDeal) {
+                navigate(`/?section=kanban&funnelId=${activeDeal.funnel_id}&dealId=${activeDeal.id}`);
+              } else {
+                navigate(`/creators?id=${client.id}`);
+              }
+            }}
+            title={activeDeal ? "Ver no Kanban" : "Ver Perfil"}
             className="p-1.5 text-gray-400 hover:text-[#004aad] hover:bg-gray-50 rounded-lg transition-colors">
             <i className="ri-external-link-line text-sm"></i>
           </button>

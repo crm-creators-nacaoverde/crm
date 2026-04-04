@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useActivityLog } from '../../../hooks/useActivityLog';
@@ -59,6 +60,7 @@ function loadHideClosed(): boolean {
 }
 
 export default function KanbanSection() {
+  const [searchParams] = useSearchParams();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
@@ -153,6 +155,18 @@ export default function KanbanSection() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Abrir modal de detalhes se houver dealId na URL
+  useEffect(() => {
+    const dealId = searchParams.get('dealId');
+    if (dealId && deals.length > 0) {
+      const deal = deals.find(d => d.id === dealId);
+      if (deal) {
+        setDetailDeal(deal);
+        setIsDetailOpen(true);
+      }
+    }
+  }, [searchParams, deals]);
 
   // Filtrar deals pelo funil selecionado
   const filteredDealsByFunnel = deals.filter(deal => deal.funnel_id === selectedFunnelId);
