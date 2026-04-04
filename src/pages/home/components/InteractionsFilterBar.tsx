@@ -79,33 +79,7 @@ export default function InteractionsFilterBar({
             </button>
           </div>
 
-          {/* Quick Type Filter Buttons */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 -mb-2">
-            <button
-              onClick={() => handleFilterChange('type', 'all')}
-              className={`px-3 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all flex-shrink-0 ${
-                filters.type === 'all'
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-500 hover:bg-gray-50'
-              }`}
-            >
-              Todos
-            </button>
-            {interactionTypes.map((type) => (
-              <button
-                key={type.id}
-                onClick={() => handleFilterChange('type', type.name)}
-                className={`px-3 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-all flex-shrink-0 ${
-                  filters.type === type.name
-                    ? 'bg-gray-900 text-white'
-                    : 'text-gray-500 hover:bg-gray-50'
-                }`}
-                title={type.name}
-              >
-                <i className={`${type.icon} text-sm`}></i>
-              </button>
-            ))}
-          </div>
+
         </div>
 
         {/* Expanded Filter Panel */}

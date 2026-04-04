@@ -247,10 +247,10 @@ export default function InteractionsSection() {
       {/* Stats Cards - Interactive */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <button 
-          onClick={() => setFilterType('all')}
-          className={`bg-white rounded-2xl border p-5 flex flex-col items-start gap-3 transition-all text-left group ${filterType === 'all' ? 'border-brand-500 ring-4 ring-brand-500/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'}`}
+          onClick={() => setFilters({ ...filters, type: 'all' })}
+          className={`bg-white rounded-2xl border p-5 flex flex-col items-start gap-3 transition-all text-left group ${filters.type === 'all' ? 'border-brand-500 ring-4 ring-brand-500/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'}`}
         >
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${filterType === 'all' ? 'bg-brand-500 text-white' : 'bg-gray-50 text-gray-400 group-hover:bg-gray-100'}`}>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${filters.type === 'all' ? 'bg-brand-500 text-white' : 'bg-gray-50 text-gray-400 group-hover:bg-gray-100'}`}>
             <i className="ri-message-3-line text-xl"></i>
           </div>
           <div>
@@ -261,11 +261,11 @@ export default function InteractionsSection() {
 
         {['meeting', 'email', 'call', 'whatsapp'].map(type => {
           const cfg = getTypeConfig(type);
-          const isActive = filterType === type;
+          const isActive = filters.type === type;
           return (
             <button 
               key={type}
-              onClick={() => setFilterType(type)}
+              onClick={() => setFilters({ ...filters, type })}
               className={`bg-white rounded-2xl border p-5 flex flex-col items-start gap-3 transition-all text-left group ${isActive ? 'border-brand-500 ring-4 ring-brand-500/5 shadow-sm' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'}`}
             >
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${isActive ? 'text-white' : `${cfg.text} ${cfg.bg} group-hover:opacity-80`}`} style={isActive ? { backgroundColor: cfg.color } : {}}>
