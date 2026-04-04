@@ -22,22 +22,26 @@ export default function WhatsAppPage() {
     loadConversations,
   } = useWhatsApp();
 
-  // Selecionar conversa via parâmetro de telefone
+  // Selecionar ou iniciar conversa via parâmetro de telefone
   useEffect(() => {
     const phone = searchParams.get('phone');
-    if (phone && conversations.length > 0) {
+    if (phone && !loading) {
       const digits = phone.replace(/\D/g, '');
       const jid = digits + '@s.whatsapp.net';
       const conv = conversations.find(c => c.remote_jid === jid);
+      
       if (conv) {
-        selectConversation(conv.id);
+        if (activeConvId !== conv.id) {
+          selectConversation(conv.id);
+        }
       } else {
-        // Se não encontrar, pode ser uma nova conversa
-        // Mas como as conversas vêm do banco, se não estiver lá, não selecionamos nada por enquanto
-        // O startConversation poderia ser usado aqui se quiséssemos criar automaticamente
+        // Se não encontrar na lista atual, tenta iniciar uma nova conversa
+        // Passamos o nome do cliente se estiver disponível na sidebar ou contexto, 
+        // mas aqui usamos o próprio telefone como fallback inicial
+        startConversation(digits, null, digits);
       }
     }
-  }, [searchParams, conversations, selectConversation]);
+  }, [searchParams, conversations, loading, activeConvId, selectConversation, startConversation]);
 
   const [showNewConv, setShowNewConv]     = useState(false);
   const [showCloseConv, setShowCloseConv] = useState(false);

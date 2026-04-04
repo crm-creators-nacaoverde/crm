@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Modal from '../../../components/base/Modal';
 import { supabase } from '../../../lib/supabase';
 import { Deal } from './KanbanSection';
@@ -321,6 +322,7 @@ export default function DealDetailModal({
   onEdit,
   onClientUpdated,
 }: DealDetailModalProps) {
+  const navigate = useNavigate();
   const [client, setClient]               = useState<ClientFull | null>(null);
   const [loading, setLoading]             = useState(false);
   const [activeTab, setActiveTab]         = useState<'info' | 'resultados' | 'historico' | 'tarefas'>('info');
