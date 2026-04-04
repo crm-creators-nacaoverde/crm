@@ -470,15 +470,66 @@ export default function FunnelManagerModal({ isOpen, onClose }: FunnelManagerMod
     if (!deletingId) return;
     const toDelete = funnels.find(f => f.id === deletingId);
     const fStats = stats.get(deletingId);
-    if (fStats && fStats.dealCount > 0 && moveToFunnelId) {
-      await supabase.from('deals').update({ funnel_id: moveToFunnelId }).eq('funnel_id', deletingId);
+    
+    try {
+      // 1. Tratar as negociações (deals)
+      if (fStats && fStats.dealCount > 0) {
+        if (moveToFunnelId) {
+          // Mover para outro funil
+          // Precisamos também mover para a primeira etapa do funil de destino para evitar erros de stage_id
+          const { data: targetStages } = await supabase
+            .from('funnel_stages')
+            .select('id')
+            .eq('funnel_id', moveToFunnelId)
+            .order('sort_order')
+            .limit(1);
+          
+          const targetStageId = targetStages?.[0]?.id;
+          
+          await supabase.from('deals')
+            .update({ 
+              funnel_id: moveToFunnelId,
+              stage_id: targetStageId || null 
+            })
+            .eq('funnel_id', deletingId);
+        } else {
+          // Excluir negociações permanentemente
+          await supabase.from('deals').delete().eq('funnel_id', deletingId);
+        }
+      }
+
+      // 2. Excluir as etapas (stages) do funil
+      await supabase.from('funnel_stages').delete().eq('funnel_id', deletingId);
+
+      // 3. Excluir o funil
+      const result = await deleteFunnel(deletingId);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Erro ao excluir funil');
+      }
+
+      if (toDelete) {
+        await logActivity({ 
+          action: 'delete', 
+          module: 'funnels', 
+          entityId: deletingId, 
+          entityName: toDelete.name, 
+          details: { 
+            deletedData: toDelete, 
+            dealsMoved: fStats?.dealCount || 0, 
+            movedToFunnelId: moveToFunnelId || null 
+          } 
+        });
+      }
+      
+      setDeletingId(null); 
+      setMoveToFunnelId('');
+      await reloadFunnels(); 
+      await loadStats();
+    } catch (error: any) {
+      console.error('Erro ao excluir funil:', error);
+      alert(`Não foi possível excluir o funil: ${error.message}`);
     }
-    await deleteFunnel(deletingId);
-    if (toDelete) {
-      await logActivity({ action: 'delete', module: 'funnels', entityId: deletingId, entityName: toDelete.name, details: { deletedData: toDelete, dealsMoved: fStats?.dealCount || 0, movedToFunnelId: moveToFunnelId || null } });
-    }
-    setDeletingId(null); setMoveToFunnelId('');
-    await reloadFunnels(); await loadStats();
   };
 
   if (!isOpen) return null;
