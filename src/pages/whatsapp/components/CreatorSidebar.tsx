@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { WaConversation } from '../../../hooks/useWhatsApp';
 import { useNavigate } from 'react-router-dom';
+import { useFunnels } from '../../../hooks/useFunnels';
+import { useFunnelStages } from '../../../hooks/useFunnelStages';
 
 interface Props {
   conversation: WaConversation | null;
@@ -28,21 +30,34 @@ interface RecentInteraction {
   date: string;
 }
 
+interface ActiveDeal {
+  id: string;
+  title: string;
+  stage: string;
+  funnel_id: string;
+}
+
 type TabType = 'perfil' | 'anotacoes' | 'resultados' | 'tarefas';
 
 export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
   const navigate = useNavigate();
   const [client, setClient] = useState<ClientInfo | null>(null);
   const [interactions, setInteractions] = useState<RecentInteraction[]>([]);
+  const [activeDeal, setActiveDeal] = useState<ActiveDeal | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('perfil');
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [updatingStage, setUpdatingStage] = useState(false);
+
+  const { funnels } = useFunnels();
+  const { stages, reloadStages } = useFunnelStages(activeDeal?.funnel_id);
 
   useEffect(() => {
     if (!conversation?.client_id) { 
       setClient(null); 
       setInteractions([]); 
+      setActiveDeal(null);
       return; 
     }
     setLoading(true);
@@ -51,10 +66,17 @@ export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
         .eq('id', conversation.client_id).single(),
       supabase.from('interactions').select('id,type,title,date')
         .eq('client_id', conversation.client_id).order('date', { ascending: false }).limit(5),
-    ]).then(([clientRes, intRes]) => {
+      supabase.from('deals').select('id,title,stage,funnel_id')
+        .eq('client_id', conversation.client_id)
+        .not('stage', 'in', '("won","lost")')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ]).then(([clientRes, intRes, dealRes]) => {
       setClient(clientRes.data);
       setNoteText(clientRes.data?.notes || '');
       setInteractions(intRes.data || []);
+      setActiveDeal(dealRes.data);
       setLoading(false);
     });
   }, [conversation?.client_id]);
@@ -69,6 +91,27 @@ export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
       console.error('Erro ao salvar anotação:', error);
     } finally {
       setSavingNote(false);
+    }
+  };
+
+  const handleUpdateStage = async (newStage: string) => {
+    if (!activeDeal) return;
+    setUpdatingStage(true);
+    try {
+      const { error } = await supabase
+        .from('deals')
+        .update({ 
+          stage: newStage,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', activeDeal.id);
+      
+      if (error) throw error;
+      setActiveDeal(prev => prev ? { ...prev, stage: newStage } : null);
+    } catch (error) {
+      console.error('Erro ao atualizar estágio:', error);
+    } finally {
+      setUpdatingStage(false);
     }
   };
 
@@ -135,6 +178,47 @@ export default function CreatorSidebar({ conversation, onLinkCreator }: Props) {
           <div className="flex-1 overflow-y-auto p-4">
             {activeTab === 'perfil' && (
               <div className="space-y-4">
+                {/* Funil de Acompanhamento */}
+                <div className="bg-emerald-50/50 rounded-xl p-3 border border-emerald-100/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <i className="ri-git-merge-line text-xs text-emerald-600"></i>
+                    <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-tight">Funil de Acompanhamento</p>
+                  </div>
+                  
+                  {activeDeal ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-emerald-600 font-medium">
+                          {funnels.find(f => f.id === activeDeal.funnel_id)?.name || 'Funil'}
+                        </p>
+                        {updatingStage && <i className="ri-loader-4-line animate-spin text-emerald-600 text-xs"></i>}
+                      </div>
+                      <select
+                        value={activeDeal.stage}
+                        onChange={(e) => handleUpdateStage(e.target.value)}
+                        disabled={updatingStage}
+                        className="w-full bg-white border border-emerald-200 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      >
+                        {stages.map(stage => (
+                          <option key={stage.id} value={stage.id}>
+                            {stage.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="py-1">
+                      <p className="text-[10px] text-gray-500 italic">Nenhum acompanhamento ativo para este creator.</p>
+                      <button 
+                        onClick={() => navigate('/kanban')}
+                        className="mt-2 text-[10px] font-bold text-emerald-600 hover:underline flex items-center gap-1"
+                      >
+                        <i className="ri-add-circle-line"></i> Criar no Kanban
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 gap-3">
                   {[
                     { label: 'Plataforma', value: client.platform, icon: 'ri-global-line' },
