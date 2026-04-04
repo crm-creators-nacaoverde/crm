@@ -43,7 +43,7 @@ export default function ConversationList({
   ];
 
   return (
-    <div className="flex flex-col h-full bg-white border-r border-gray-100">
+    <div className="w-80 flex flex-col h-full bg-white border-r border-gray-100">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">

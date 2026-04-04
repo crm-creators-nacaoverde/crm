@@ -79,7 +79,7 @@ export default function WhatsAppPage() {
       <div className="flex h-[calc(100vh-88px)] -m-5 lg:-m-6 overflow-hidden rounded-xl border border-gray-100 bg-white">
 
         {/* ── Coluna 1: Lista de conversas ── */}
-        <div className="w-72 flex-shrink-0 flex flex-col border-r border-gray-100 overflow-hidden">
+        <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-100 overflow-hidden">
           <ConversationList
             conversations={conversations}
             activeConvId={activeConvId}
