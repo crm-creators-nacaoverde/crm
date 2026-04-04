@@ -246,40 +246,41 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
       if (!name || !phone) { errors++; continue; }
 
       // Verificar duplicata por telefone OU e-mail
-      const emailCol = Object.entries(mapping).find(([, v]) => v === \'email\')?.[0] || \'\';
+      const emailCol = Object.entries(mapping).find(([, v]) => v === 'email')?.[0] || '';
       const email = row[emailCol]?.trim();
 
       let existing;
       if (phone) {
         const { data } = await supabase
-          .from(\'clients\')
-          .select(\'id\')
-          .eq(\'phone\', phone)
+          .from('clients')
+          .select('id')
+          .eq('phone', phone)
           .maybeSingle();
         existing = data;
       }
 
       if (!existing && email) {
         const { data } = await supabase
-          .from(\'clients\')
-          .select(\'id\')
-          .eq(\'email\', email)
+          .from('clients')
+          .select('id')
+          .eq('email', email)
           .maybeSingle();
         existing = data;
       }
 
       if (existing) {
         if (duplicateMode === 'ignore') { duplicates++; continue; }
-        if (duplicateMode === \'update\') {
+        if (duplicateMode === 'update') {
           const updateData: Record<string, unknown> = { name, email, updated_at: new Date().toISOString() };
           Object.entries(mapping).forEach(([col, field]) => {
-            if (field !== \'__ignore__\' && field !== \'name\' && field !== \'phone\' && field !== \'email\' && !field.startsWith(\'deal_\') && field !== \'tiktok_main\')
+            if (field !== '__ignore__' && field !== 'name' && field !== 'phone' && field !== 'email' && !field.startsWith('deal_') && field !== 'tiktok_main')
               updateData[field] = row[col] || null;
           });
-          await supabase.from(\'clients\').update(updateData).eq(\'id\', existing.id);
+          await supabase.from('clients').update(updateData).eq('id', existing.id);
           duplicates++;
           continue;
-        }ow' — cria mesmo assim (cai no insert abaixo)
+        }
+        // 'allow' — cria mesmo assim (cai no insert abaixo)
       }
 
       // Montar client
@@ -565,7 +566,7 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
                 <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all mb-1.5
                   ${!assignedTo ? 'border-gray-300 bg-gray-50' : 'border-gray-100 hover:border-gray-200'}`}>
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0
-                    ${!assignedTo ? 'border-gray-500 bg-gray-500' : 'border-gray-300'}`}>
+                    ${!assignedTo ? 'border-[#004aad] bg-[#004aad]' : 'border-gray-300'}`}>
                     {!assignedTo && <span className="w-2 h-2 bg-white rounded-full"></span>}
                   </div>
                   <div>
