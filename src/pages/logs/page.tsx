@@ -1,27 +1,9 @@
 import { useState, useEffect } from 'react';
-import { supabase, Interaction, Client } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import AppLayout from '../../components/feature/AppLayout';
-import LogDetailModal from './components/LogDetailModal';
 import Modal from '../../components/base/Modal';
-
-interface ActivityLog {
-  id: string;
-  user_id: string;
-  user_name: string;
-  user_email: string;
-  action: 'create' | 'update' | 'delete' | 'interaction';
-  module: string;
-  entity_id?: string;
-  entity_name?: string;
-  details?: Record<string, any>;
-  ip_address?: string;
-  created_at: string;
-  // Campos extras para interações unificadas
-  type?: string;
-  description?: string;
-  client?: Client;
-}
+import Button from '../../components/base/Button';
 
 interface UnifiedActivity {
   id: string;
@@ -46,7 +28,7 @@ interface UnifiedActivity {
 }
 
 const LogsPage = () => {
-  const { user, hasPermission } = useAuth();
+  const { user } = useAuth();
   const [activities, setActivities] = useState<UnifiedActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterView, setFilterView] = useState<'all' | 'system' | 'communication'>('all');
@@ -362,7 +344,7 @@ const LogsPage = () => {
               </div>
             )}
 
-            <Button onClick={() => setSelectedActivity(null)} className="w-full !py-4 !rounded-2xl shadow-xl">
+            <Button onClick={() => setSelectedActivity(null)} fullWidth className="!py-4 !rounded-2xl shadow-xl">
               Fechar Visualização
             </Button>
           </div>
