@@ -114,16 +114,19 @@ export default function FormBuilderModal({ isOpen, onClose, onSaved, editingForm
   }, [editingForm, isOpen]);
 
   // Função para gerar slug a partir de uma string
-  const slugify = (text: string) => {
-    return text
+  const slugify = (text: string, isFinal = true) => {
+    let s = text
       .toString()
       .toLowerCase()
-      .trim()
       .normalize('NFD') // Remove acentos
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^\w\s-]/g, '') // Remove caracteres especiais
-      .replace(/[\s_-]+/g, '-') // Substitui espaços e underscores por hífens
-      .replace(/^-+|-+$/g, ''); // Remove hífens no início e fim
+      .replace(/[\s_]+/g, '-'); // Substitui espaços e underscores por hífens
+    
+    if (isFinal) {
+      s = s.trim().replace(/^-+|-+$/g, ''); // Remove hífens no início e fim apenas no final
+    }
+    return s;
   };
 
   // Atualizar slug automaticamente quando o nome público mudar (apenas se não for edição manual ou se estiver vazio)
@@ -133,6 +136,13 @@ export default function FormBuilderModal({ isOpen, onClose, onSaved, editingForm
     if (!editingForm || !formSlug || formSlug === slugify(formPublicName)) {
       setFormSlug(slugify(val));
     }
+  };
+
+  // Lidar com a mudança manual do slug permitindo hífens durante a digitação
+  const handleSlugChange = (val: string) => {
+    // Permite letras, números e hífens, mas não limpa hífens finais durante a digitação
+    const cleaned = slugify(val, false);
+    setFormSlug(cleaned);
   };
 
   // Quando muda o funil selecionado, carregar etapas
@@ -527,7 +537,8 @@ export default function FormBuilderModal({ isOpen, onClose, onSaved, editingForm
               <input
                 type="text"
                 value={formSlug}
-                onChange={(e) => setFormSlug(slugify(e.target.value))}
+                onChange={(e) => handleSlugChange(e.target.value)}
+                onBlur={() => setFormSlug(slugify(formSlug, true))}
                 placeholder="Ex: cadastro-embaixadores"
                 className="flex-1 px-3 py-2 text-sm border border-indigo-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all font-mono"
               />
