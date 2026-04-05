@@ -74,7 +74,7 @@ const WIDGET_CATALOG = [
   { type: 'finance_summary',      label: 'Financeiro',               icon: 'ri-money-dollar-circle-line',desc: 'Pagamentos, tipos de chave e top creators' },
   { type: 'bible_summary',        label: 'Bíblia Comercial',         icon: 'ri-book-open-line',          desc: 'Engajamento em aulas e materiais' },
   { type: 'whatsapp_summary',     label: 'WhatsApp',                 icon: 'ri-whatsapp-line',           desc: 'Métricas de conversas inbound e outbound' },
-  { type: 'deals_tracking',       label: 'Acompanhamento de Negócios', icon: 'ri-shake-hands-line',        desc: 'Negócios por funil, canal, fonte, plataforma e status' },
+  { type: 'deals_tracking',       label: 'Acompanhamento de Negócios', icon: 'ri-shake-hands-line',        desc: 'Negócios por funil, categoria, fonte, plataforma e status' },
 ];
 
 const DASHBOARD_COLORS = [

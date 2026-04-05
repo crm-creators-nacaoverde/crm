@@ -6,7 +6,7 @@ interface DealsStats {
   won: number;
   lost: number;
   byFunnel: { id: string; name: string; count: number }[];
-  byChannel: { name: string; count: number }[];
+  byCategory: { name: string; count: number }[];
   bySource: { name: string; count: number }[];
   byPlatform: { name: string; count: number }[];
   byUser: { name: string; count: number }[];
@@ -55,14 +55,14 @@ export default function DealsTrackingWidget({ period = '30d' }: Props) {
           won: deals.filter(d => d.stage === 'won').length,
           lost: deals.filter(d => d.stage === 'lost').length,
           byFunnel: [],
-          byChannel: [],
+          byCategory: [],
           bySource: [],
           byPlatform: [],
           byUser: [],
         };
 
         const funnelMap: Record<string, { id: string; count: number }> = {};
-        const channelMap: Record<string, number> = {};
+        const categoryMap: Record<string, number> = {};
         const sourceMap: Record<string, number> = {};
         const platformMap: Record<string, number> = {};
         const userMap: Record<string, number> = {};
@@ -78,8 +78,8 @@ export default function DealsTrackingWidget({ period = '30d' }: Props) {
           userMap[userName] = (userMap[userName] || 0) + 1;
 
           if (deal.clients) {
-            const channel = deal.clients.whatsapp_group_link ? 'WhatsApp' : 'Outro';
-            channelMap[channel] = (channelMap[channel] || 0) + 1;
+            const category = deal.clients.category || 'Sem Categoria';
+            categoryMap[category] = (categoryMap[category] || 0) + 1;
             const source = deal.clients.capture_source || 'Direto / Outros';
             sourceMap[source] = (sourceMap[source] || 0) + 1;
             const platform = deal.clients.platform || 'Não Informada';
@@ -88,7 +88,7 @@ export default function DealsTrackingWidget({ period = '30d' }: Props) {
         });
 
         statsObj.byFunnel = Object.entries(funnelMap).map(([name, data]) => ({ id: data.id, name, count: data.count })).sort((a, b) => b.count - a.count);
-        statsObj.byChannel = Object.entries(channelMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+        statsObj.byCategory = Object.entries(categoryMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
         statsObj.bySource = Object.entries(sourceMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
         statsObj.byPlatform = Object.entries(platformMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
         statsObj.byUser = Object.entries(userMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
@@ -226,7 +226,7 @@ export default function DealsTrackingWidget({ period = '30d' }: Props) {
           <div className="grid grid-cols-2 gap-x-8 gap-y-6 overflow-y-auto pr-1 custom-scrollbar flex-1">
             <Section title="Por Funil" data={stats?.byFunnel || []} total={stats?.total || 0} />
             <Section title="Por Usuário" data={stats?.byUser || []} total={stats?.total || 0} />
-            <Section title="Por Canal" data={stats?.byChannel || []} total={stats?.total || 0} />
+            <Section title="Por Categoria" data={stats?.byCategory || []} total={stats?.total || 0} />
             <Section title="Por Fonte" data={stats?.bySource || []} total={stats?.total || 0} />
             <Section title="Por Plataforma" data={stats?.byPlatform || []} total={stats?.total || 0} />
           </div>
