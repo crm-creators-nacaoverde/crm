@@ -19,6 +19,8 @@ export default function TopCreatorsAndInteractions({
     })}`;
 
   const gmvField = getGmvField(gmvPeriod);
+  const videosField = `videos_${gmvPeriod}`;
+  const livesField = `lives_${gmvPeriod}`;
 
   const periodLabel: Record<GmvPeriod, string> = {
     '7d': '7d',
@@ -30,8 +32,8 @@ export default function TopCreatorsAndInteractions({
   // Safely sort clients by the dynamic GMV field
   const topCreators = [...clients]
     .sort((a, b) => {
-      const aVal = Number((a as any)[gmvField] ?? 0);
       const bVal = Number((b as any)[gmvField] ?? 0);
+      const aVal = Number((a as any)[gmvField] ?? 0);
       return bVal - aVal;
     })
     .slice(0, 6);
@@ -94,31 +96,52 @@ export default function TopCreatorsAndInteractions({
           Top 6 Creators por GMV Interno ({periodLabel[gmvPeriod]})
         </h3>
         <div className="space-y-1">
-          {topCreators.map((client, idx) => (
-            <div
-              key={client.id}
-              className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50 transition-colors"
-            >
+          {topCreators.map((client, idx) => {
+            const videos = Number((client as any)[videosField] ?? 0);
+            const lives = Number((client as any)[livesField] ?? 0);
+            
+            return (
               <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 ${
-                  idx < 3 ? rankColors[idx] : 'bg-gray-200 text-gray-500'
-                }`}
+                key={client.id}
+                className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                {idx + 1}
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 ${
+                    idx < 3 ? rankColors[idx] : 'bg-gray-200 text-gray-500'
+                  }`}
+                >
+                  {idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {client.name}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-gray-400">
+                      {client.platform || 'TikTok'}
+                    </span>
+                    {(videos > 0 || lives > 0) && (
+                      <div className="flex items-center gap-2 ml-1">
+                        {videos > 0 && (
+                          <span className="flex items-center gap-0.5 text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 rounded">
+                            <i className="ri-video-line"></i> {videos}
+                          </span>
+                        )}
+                        {lives > 0 && (
+                          <span className="flex items-center gap-0.5 text-[10px] font-medium text-rose-600 bg-rose-50 px-1.5 rounded">
+                            <i className="ri-broadcast-line"></i> {lives}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+                  {formatCurrency(Number((client as any)[gmvField] ?? 0))}
+                </span>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {client.name}
-                </p>
-                <p className="text-[11px] text-gray-400">
-                  {client.platform || 'TikTok'}
-                </p>
-              </div>
-              <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
-                {formatCurrency(Number((client as any)[gmvField] ?? 0))}
-              </span>
-            </div>
-          ))}
+            );
+          })}
           {topCreators.length === 0 && (
             <p className="text-sm text-gray-400 text-center py-8">
               Sem dados
