@@ -18,6 +18,7 @@ import FinanceiroPage from "../pages/financeiro/page";
 import BibliaPage from "../pages/biblia/page";
 import WhatsAppPage from "../pages/whatsapp/page";
 import ModulePage from "../pages/biblia/ModulePage";
+import WebhooksPage from "../pages/webhooks/page";
 
 const routes: RouteObject[] = [
   {
@@ -75,6 +76,10 @@ const routes: RouteObject[] = [
   {
     path: "/users",
     element: <UsersPage />,
+  },
+  {
+    path: "/webhooks",
+    element: <WebhooksPage />,
   },
   {
     path: "/logs",
