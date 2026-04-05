@@ -92,18 +92,27 @@ export default function TopCreatorsAndInteractions({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Top 6 Creators por GMV Interno */}
       <div className="bg-white rounded-xl border border-gray-100 p-5">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">
-          Top 6 Creators por GMV Interno ({periodLabel[gmvPeriod]})
-        </h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-900">
+            Top 6 Creators ({periodLabel[gmvPeriod]})
+          </h3>
+          <div className="flex items-center gap-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            <span className="w-8 text-center">Vid</span>
+            <span className="w-8 text-center">Live</span>
+            <span className="w-20 text-right">GMV</span>
+          </div>
+        </div>
+        
         <div className="space-y-1">
           {topCreators.map((client, idx) => {
             const videos = Number((client as any)[videosField] ?? 0);
             const lives = Number((client as any)[livesField] ?? 0);
+            const gmv = Number((client as any)[gmvField] ?? 0);
             
             return (
               <div
                 key={client.id}
-                className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <div
                   className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 ${
@@ -112,33 +121,33 @@ export default function TopCreatorsAndInteractions({
                 >
                   {idx + 1}
                 </div>
+                
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-semibold text-gray-900 truncate">
                     {client.name}
                   </p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-[10px] text-gray-400">
-                      {client.platform || 'TikTok'}
+                  <p className="text-[10px] text-gray-400 truncate">
+                    {client.platform || 'TikTok'}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <div className="w-8 flex justify-center">
+                    <span className={`text-[11px] font-bold ${videos > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
+                      {videos}
                     </span>
-                    {(videos > 0 || lives > 0) && (
-                      <div className="flex items-center gap-2 ml-1">
-                        {videos > 0 && (
-                          <span className="flex items-center gap-0.5 text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 rounded">
-                            <i className="ri-video-line"></i> {videos}
-                          </span>
-                        )}
-                        {lives > 0 && (
-                          <span className="flex items-center gap-0.5 text-[10px] font-medium text-rose-600 bg-rose-50 px-1.5 rounded">
-                            <i className="ri-broadcast-line"></i> {lives}
-                          </span>
-                        )}
-                      </div>
-                    )}
+                  </div>
+                  <div className="w-8 flex justify-center">
+                    <span className={`text-[11px] font-bold ${lives > 0 ? 'text-rose-600' : 'text-gray-300'}`}>
+                      {lives}
+                    </span>
+                  </div>
+                  <div className="w-20 text-right">
+                    <span className="text-sm font-bold text-gray-700">
+                      {formatCurrency(gmv)}
+                    </span>
                   </div>
                 </div>
-                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
-                  {formatCurrency(Number((client as any)[gmvField] ?? 0))}
-                </span>
               </div>
             );
           })}
