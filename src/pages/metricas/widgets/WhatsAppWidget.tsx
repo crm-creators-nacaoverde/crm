@@ -34,6 +34,7 @@ export default function WhatsAppWidget({ period = '30d' }: Props) {
   useEffect(() => {
     const fetchWhatsApp = async () => {
       setLoading(true);
+      console.log('Fetching WhatsApp stats for period:', period);
       
       const days = parseInt(period.replace('d', ''));
       const startDate = new Date();

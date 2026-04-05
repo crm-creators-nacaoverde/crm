@@ -842,6 +842,14 @@ export default function MetricasPage() {
           </button>
         </div>
 
+        <button 
+          onClick={() => { setLoading(true); loadData(); }}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm font-medium text-gray-600 hover:text-[#004aad] hover:border-[#004aad]/20 transition-all shadow-sm cursor-pointer"
+        >
+          <i className={`ri-refresh-line ${loading ? 'animate-spin' : ''}`}></i>
+          Atualizar Dados
+        </button>
+
         {/* ════════════════════════════════════════════════════════
             ABA DASHBOARDS — conteúdo 100% original
         ════════════════════════════════════════════════════════ */}
