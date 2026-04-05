@@ -69,13 +69,10 @@ Deno.serve(async (req) => {
   const userAgent = req.headers.get('user-agent') || null;
 
   // ── Mapear campos do payload para campos do CRM ───────────────────────────
-  // field_mapping: { "campo_fonte": "campo_crm" }
-  // Ex: { "nome": "name", "celular": "phone" }
   const mapping: Record<string, string> = endpoint.field_mapping || {};
   const mapped: Record<string, unknown> = {};
 
   for (const [sourceKey, crmKey] of Object.entries(mapping)) {
-    // Suporte a chaves aninhadas: "lead_data.name"
     const val = sourceKey.split('.').reduce<unknown>((obj, k) => {
       if (obj && typeof obj === 'object') return (obj as Record<string, unknown>)[k];
       return undefined;
@@ -87,6 +84,37 @@ Deno.serve(async (req) => {
   const name  = (mapped.name  as string) || (payload.name  as string) || 'Lead via Webhook';
   const phone = (mapped.phone as string) || (payload.phone as string) || (payload.telefone as string) || '';
   const email = (mapped.email as string) || (payload.email as string) || '';
+
+  // ── Sincronização de Fonte de Captura ─────────────────────────────────────
+  // 1. Prioridade: campo mapeado 'capture_source'
+  // 2. Fallback: 'source_label' do endpoint
+  // 3. Fallback final: 'Webhook'
+  let rawSource = (mapped.capture_source as string) || endpoint.source_label || 'Webhook';
+  
+  // Buscar fontes ativas no sistema para normalização
+  const { data: activeSources } = await supabase
+    .from('capture_sources')
+    .select('name')
+    .eq('is_active', true);
+
+  let finalSource = 'Webhook'; // Default seguro
+  if (activeSources && activeSources.length > 0) {
+    // Tentar match exato ou case-insensitive
+    const match = activeSources.find(s => 
+      s.name.toLowerCase() === rawSource.toLowerCase() || 
+      s.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === 
+      rawSource.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    );
+    
+    if (match) {
+      finalSource = match.name;
+    } else {
+      // Se não houver match, verifica se a fonte padrão 'Webhook' existe
+      const webhookSource = activeSources.find(s => s.name === 'Webhook');
+      if (webhookSource) finalSource = 'Webhook';
+      else finalSource = activeSources[0].name; // Pega a primeira disponível se 'Webhook' não existir
+    }
+  }
 
   // ── Verificar duplicata ───────────────────────────────────────────────────
   let existingClient: { id: string; name: string } | null = null;
@@ -114,15 +142,14 @@ Deno.serve(async (req) => {
 
   try {
     if (existingClient && endpoint.duplicate_mode === 'ignore') {
-      // ── Duplicata ignorada ────────────────────────────────────────────────
       logStatus  = 'duplicate';
       clientId   = existingClient.id;
       clientName = existingClient.name;
 
     } else if (existingClient && endpoint.duplicate_mode === 'update') {
-      // ── Atualizar creator existente ───────────────────────────────────────
       const updatePayload: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
+        capture_source: finalSource, // Atualiza a fonte também no update
       };
       if (mapped.phone || phone) updatePayload.phone = mapped.phone || phone;
       if (mapped.email || email) updatePayload.email = mapped.email || email;
@@ -134,7 +161,6 @@ Deno.serve(async (req) => {
       clientName = existingClient.name;
 
     } else {
-      // ── Criar novo creator ────────────────────────────────────────────────
       const clientPayload: Record<string, unknown> = {
         name,
         email:    email || `${name.toLowerCase().replace(/\s+/g, '.')}@webhook.com`,
@@ -142,13 +168,11 @@ Deno.serve(async (req) => {
         status:   'active',
         category: (mapped.category as string) || 'Creators',
         platform: (mapped.platform as string) || 'TikTok',
-        // followers: aceita número direto OU ranges de texto como "10000-100000" ou "mais-100000"
+        capture_source: finalSource, // Fonte normalizada
         followers: (() => {
           const raw = String(mapped.followers || '0');
-          // Se for número puro
           const num = parseInt(raw, 10);
           if (!isNaN(num) && num > 0) return num;
-          // Se for range "X-Y" → pega o menor valor
           const rangeMatch = raw.match(/(\d+)/);
           return rangeMatch ? parseInt(rangeMatch[1], 10) : 0;
         })(),
@@ -158,7 +182,6 @@ Deno.serve(async (req) => {
         notes:          (mapped.notes as string) || null,
         instagram_profile: (mapped.instagram_profile as string) || null,
         youtube_canal:  (mapped.youtube_canal as string) || null,
-        // tiktok_links é array no banco — aceita string única ou array
         tiktok_links: mapped.tiktok_links
           ? Array.isArray(mapped.tiktok_links)
             ? mapped.tiktok_links
@@ -180,7 +203,6 @@ Deno.serve(async (req) => {
       clientId   = newClient.id;
       clientName = newClient.name;
 
-      // ── Criar deal no funil configurado ──────────────────────────────────
       if (endpoint.funnel_id && endpoint.stage_id) {
         const dealPayload = {
           title:          `${name} - Webhook`,
@@ -206,12 +228,11 @@ Deno.serve(async (req) => {
         dealId = newDeal?.id || null;
       }
 
-      // ── Registrar no client_history ───────────────────────────────────────
       await supabase.from('client_history').insert({
         client_id:  clientId,
         event_type: 'cadastro',
         title:      'Creator recebido via Webhook',
-        description: `Fonte: ${endpoint.source_label || 'Externo'} | Endpoint: ${endpoint.name}`,
+        description: `Fonte: ${finalSource} | Endpoint: ${endpoint.name}`,
         user_name:  'Sistema (Webhook)',
         created_at: new Date().toISOString(),
       });
@@ -223,7 +244,6 @@ Deno.serve(async (req) => {
     errorMessage = err instanceof Error ? err.message : String(err);
   }
 
-  // ── Salvar log da chamada ─────────────────────────────────────────────────
   await supabase.from('webhook_logs').insert({
     endpoint_id:   endpoint.id,
     status:        logStatus,
@@ -237,7 +257,6 @@ Deno.serve(async (req) => {
     created_at:    new Date().toISOString(),
   });
 
-  // ── Resposta ──────────────────────────────────────────────────────────────
   const responseBody = {
     ok:          logStatus !== 'error',
     status:      logStatus,
