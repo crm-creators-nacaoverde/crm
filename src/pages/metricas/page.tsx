@@ -17,6 +17,7 @@ import LogisticsWidget from './widgets/LogisticsWidget';
 import FinanceWidget from './widgets/FinanceWidget';
 import BibleWidget from './widgets/BibleWidget';
 import WhatsAppWidget from './widgets/WhatsAppWidget';
+import DealsTrackingWidget from './widgets/DealsTrackingWidget';
 
 export type GmvPeriod = '7d' | '14d' | '28d' | '30d';
 
@@ -73,6 +74,7 @@ const WIDGET_CATALOG = [
   { type: 'finance_summary',      label: 'Financeiro',               icon: 'ri-money-dollar-circle-line',desc: 'Pagamentos, tipos de chave e top creators' },
   { type: 'bible_summary',        label: 'Bíblia Comercial',         icon: 'ri-book-open-line',          desc: 'Engajamento em aulas e materiais' },
   { type: 'whatsapp_summary',     label: 'WhatsApp',                 icon: 'ri-whatsapp-line',           desc: 'Métricas de conversas inbound e outbound' },
+  { type: 'deals_tracking',       label: 'Acompanhamento de Negócios', icon: 'ri-shake-hands-line',        desc: 'Negócios por funil, canal, fonte, plataforma e status' },
 ];
 
 const DASHBOARD_COLORS = [
@@ -135,6 +137,7 @@ function WidgetRenderer({
     case 'finance_summary':    return <FinanceWidget />;
     case 'bible_summary':      return <BibleWidget />;
     case 'whatsapp_summary':   return <WhatsAppWidget period={gmvPeriod} />;
+    case 'deals_tracking':     return <DealsTrackingWidget period={gmvPeriod} />;
     default:
       return (
         <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
