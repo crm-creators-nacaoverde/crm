@@ -7,11 +7,12 @@ interface ActivityBarsProps {
 
 export default function ActivityBars({ clients, totalInteractions }: ActivityBarsProps) {
   const activeCount = clients.filter(c => c.status === 'active').length;
+  const inactiveCount = clients.filter(c => c.status === 'inactive').length;
   const activityRate = clients.length > 0 ? (activeCount / clients.length) * 100 : 0;
   const avgInteractions = clients.length > 0 ? totalInteractions / clients.length : 0;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {/* Taxa de Atividade */}
       <div className="bg-gradient-to-r from-[#004aad] to-[#003d91] rounded-xl p-5 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-8 translate-x-8"></div>
@@ -23,6 +24,21 @@ export default function ActivityBars({ clients, totalInteractions }: ActivityBar
           </div>
           <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center">
             <i className="ri-pulse-line text-2xl text-white"></i>
+          </div>
+        </div>
+      </div>
+
+      {/* Creators Inativos */}
+      <div className="bg-gradient-to-r from-rose-500 to-rose-600 rounded-xl p-5 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-8 translate-x-8"></div>
+        <div className="flex items-center justify-between relative z-10">
+          <div>
+            <p className="text-sm font-medium text-rose-100">Creators Inativos</p>
+            <p className="text-3xl font-bold mt-1">{inactiveCount}</p>
+            <p className="text-xs text-rose-200 mt-1">Total de inativos</p>
+          </div>
+          <div className="w-12 h-12 bg-white/15 rounded-xl flex items-center justify-center">
+            <i className="ri-user-unfollow-line text-2xl text-white"></i>
           </div>
         </div>
       </div>
