@@ -134,7 +134,7 @@ function WidgetRenderer({
     case 'logistics_summary':  return <LogisticsWidget />;
     case 'finance_summary':    return <FinanceWidget />;
     case 'bible_summary':      return <BibleWidget />;
-    case 'whatsapp_summary':   return <WhatsAppWidget />;
+    case 'whatsapp_summary':   return <WhatsAppWidget period={gmvPeriod} />;
     default:
       return (
         <div className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
