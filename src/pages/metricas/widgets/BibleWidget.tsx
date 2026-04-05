@@ -89,7 +89,15 @@ export default function BibleWidget() {
     </div>
   );
 
-  if (!stats) return null;
+  if (!stats || stats.totalLessons === 0) return (
+    <div className="bg-white rounded-xl border border-gray-100 p-5 h-full flex flex-col items-center justify-center text-center">
+      <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center mb-3">
+        <i className="ri-book-open-line text-2xl text-amber-600"></i>
+      </div>
+      <p className="text-sm font-medium text-gray-600">Bíblia Comercial</p>
+      <p className="text-xs text-gray-400 mt-1">Nenhuma aula cadastrada ou publicada ainda.</p>
+    </div>
+  );
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 p-5 h-full">
