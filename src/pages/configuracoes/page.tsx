@@ -67,6 +67,16 @@ export default function ConfiguracoesPage() {
       permissionAction: 'view',
     },
     {
+      icon: 'ri-webhook-line',
+      iconBg: 'bg-violet-50',
+      iconColor: 'text-violet-600',
+      title: 'Webhooks',
+      description: 'Receba leads automaticamente de fontes externas',
+      path: '/webhooks',
+      permission: 'webhooks',
+      permissionAction: 'view',
+    },
+    {
       icon: 'ri-history-line',
       iconBg: 'bg-[#5de0e6]/15',
       iconColor: 'text-[#004aad]',
