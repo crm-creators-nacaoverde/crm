@@ -30,16 +30,6 @@ const CRM_FIELDS = [
   { value: 'tiktok_links',  label: 'Link TikTok' },
 ];
 
-const SOURCE_OPTIONS = [
-  { value: 'Genérico',         label: 'Genérico / Outro' },
-  { value: 'Facebook Lead Ads',label: 'Facebook Lead Ads' },
-  { value: 'RD Station',       label: 'RD Station' },
-  { value: 'Typeform',         label: 'Typeform (via Zapier)' },
-  { value: 'Zapier',           label: 'Zapier' },
-  { value: 'Make',             label: 'Make (Integromat)' },
-  { value: 'ActiveCampaign',   label: 'ActiveCampaign' },
-];
-
 const DUPLICATE_OPTIONS = [
   { value: 'ignore', label: 'Ignorar duplicatas',         desc: 'Lead já existente não é modificado' },
   { value: 'update', label: 'Atualizar duplicatas',       desc: 'Atualiza telefone/e-mail do creator existente' },
@@ -52,6 +42,7 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
   const [selectedFunnelId, setSelectedFunnelId] = useState('');
   const { stages } = useFunnelStages(selectedFunnelId || undefined);
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
+  const [captureSources, setCaptureSources] = useState<{ name: string }[]>([]);
 
   const [saving, setSaving]       = useState(false);
   const [copied, setCopied]       = useState(false);
@@ -66,7 +57,7 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
 
   const [form, setForm] = useState({
     name:           'Webhook Principal',
-    source_label:   'Genérico',
+    source_label:   'Webhook',
     funnel_id:      '',
     funnel_name:    '',
     stage_id:       '',
@@ -80,10 +71,11 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
   useEffect(() => {
     if (!isOpen) return;
     loadUsers();
+    loadCaptureSources();
     if (editingEndpoint) {
       setForm({
         name:           editingEndpoint.name,
-        source_label:   editingEndpoint.source_label || 'Genérico',
+        source_label:   editingEndpoint.source_label || 'Webhook',
         funnel_id:      editingEndpoint.funnel_id || '',
         funnel_name:    editingEndpoint.funnel_name || '',
         stage_id:       editingEndpoint.stage_id || '',
@@ -98,7 +90,7 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
       if (rows.length > 0) setMappingRows(rows);
     } else {
       setForm({
-        name: 'Webhook Principal', source_label: 'Genérico',
+        name: 'Webhook Principal', source_label: 'Webhook',
         funnel_id: '', funnel_name: '', stage_id: '', stage_label: '',
         assigned_to: '', assigned_name: '', duplicate_mode: 'ignore', is_active: true,
       });
@@ -115,6 +107,11 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
   const loadUsers = async () => {
     const { data } = await supabase.from('user_profiles').select('id, full_name').eq('is_active', true).order('full_name');
     setUsers(data || []);
+  };
+
+  const loadCaptureSources = async () => {
+    const { data } = await supabase.from('capture_sources').select('name').eq('is_active', true).order('sort_order');
+    setCaptureSources(data || []);
   };
 
   const handleFunnelChange = (funnelId: string) => {
@@ -255,11 +252,12 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
                     placeholder="Ex: Facebook Lead Ads" className={inp} />
                 </div>
                 <div>
-                  <label className={labelClass}>Fonte</label>
+                  <label className={labelClass}>Fonte de Captura Oficial</label>
                   <select value={form.source_label}
                     onChange={e => setForm(p => ({ ...p, source_label: e.target.value }))}
                     className={inp}>
-                    {SOURCE_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    <option value="">Selecione uma fonte...</option>
+                    {captureSources.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -348,61 +346,48 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
               </div>
 
               {/* Cabeçalho */}
-              <div className="grid grid-cols-2 gap-3 px-1">
-                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Campo da fonte (JSON)</p>
-                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Campo no CRM</p>
+              <div className="grid grid-cols-[1fr_1fr_40px] gap-3 px-2">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Campo da fonte (JSON)</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Campo no CRM</span>
+                <span></span>
               </div>
 
-              {/* Linhas de mapeamento */}
+              {/* Linhas */}
               <div className="space-y-2">
                 {mappingRows.map((row, i) => (
-                  <div key={i} className="grid grid-cols-2 gap-3 items-center">
+                  <div key={i} className="grid grid-cols-[1fr_1fr_40px] gap-3 items-center group">
                     <input type="text" value={row.source}
                       onChange={e => updateMappingRow(i, 'source', e.target.value)}
-                      placeholder="ex: lead_name" className={`${inp} font-mono text-xs`} />
-                    <div className="flex items-center gap-2">
-                      <select value={row.crm} onChange={e => updateMappingRow(i, 'crm', e.target.value)} className={inp}>
-                        {CRM_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                      </select>
-                      <button onClick={() => removeMappingRow(i)}
-                        className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg cursor-pointer transition-all flex-shrink-0">
-                        <i className="ri-close-line text-sm"></i>
-                      </button>
-                    </div>
+                      placeholder="ex: full_name" className={inp} />
+                    <select value={row.crm}
+                      onChange={e => updateMappingRow(i, 'crm', e.target.value)}
+                      className={inp}>
+                      {CRM_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                    </select>
+                    <button onClick={() => removeMappingRow(i)}
+                      className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all cursor-pointer">
+                      <i className="ri-delete-bin-line"></i>
+                    </button>
                   </div>
                 ))}
               </div>
 
               <button onClick={addMappingRow}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 rounded-lg cursor-pointer transition-colors">
+                className="w-full py-2.5 border-2 border-dashed border-gray-100 rounded-xl text-xs font-medium text-gray-400 hover:border-violet-200 hover:text-violet-600 hover:bg-violet-50 transition-all cursor-pointer flex items-center justify-center gap-2">
                 <i className="ri-add-line text-sm"></i>Adicionar campo
               </button>
-
-              {/* Preview do mapeamento gerado */}
-              <div className="bg-gray-900 rounded-xl p-4">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Preview do JSON esperado</p>
-                <pre className="text-xs text-emerald-400 font-mono overflow-x-auto">
-{JSON.stringify(
-  Object.fromEntries(mappingRows.filter(r => r.source).map(r => [r.source, `<${r.crm}>`])),
-  null, 2
-)}
-                </pre>
-              </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex gap-2 px-6 py-4 border-t border-gray-100 flex-shrink-0">
-          <button onClick={onClose}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer transition-colors">
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer">
             Cancelar
           </button>
-          <button onClick={handleSave} disabled={saving || !form.name.trim()}
-            className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-xl cursor-pointer transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-            {saving
-              ? <><i className="ri-loader-4-line animate-spin"></i>Salvando...</>
-              : <><i className="ri-save-line"></i>{editingEndpoint ? 'Salvar alterações' : 'Criar Webhook'}</>}
+          <button onClick={handleSave} disabled={saving}
+            className="px-6 py-2 text-sm font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl shadow-lg shadow-violet-200 transition-all cursor-pointer disabled:opacity-50">
+            {saving ? 'Salvando...' : 'Salvar Configuração'}
           </button>
         </div>
       </div>
