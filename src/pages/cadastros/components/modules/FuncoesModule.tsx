@@ -1,5 +1,5 @@
 // src/pages/cadastros/components/modules/FuncoesModule.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../../lib/supabase';
 import { getDefaultPermissions, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../../../../lib/rolePermissions';
 import type { Permissions } from '../../../../lib/rolePermissions';
@@ -36,6 +36,7 @@ interface RoleConfig {
 
 export default function FuncoesModule() {
   const [roles, setRoles] = useState<RoleConfig[]>([]);
+  const [companySettingsId, setCompanySettingsId] = useState<string | null>(null);
   const [editing, setEditing] = useState<RoleConfig | null>(null);
   const [editPerms, setEditPerms] = useState<Permissions | null>(null);
   const [editLabel, setEditLabel] = useState('');
@@ -43,13 +44,9 @@ export default function FuncoesModule() {
   const [saving, setSaving] = useState(false);
   const [showNew, setShowNew] = useState(false);
 
-  // Carregar funções (padrão + customizadas do company_settings)
-  useEffect(() => {
-    loadRoles();
-  }, []);
-
-  const loadRoles = async () => {
-    const { data } = await supabase.from('company_settings').select('custom_roles').single();
+  const loadRoles = useCallback(async () => {
+    const { data } = await supabase.from('company_settings').select('id, custom_roles').single();
+    setCompanySettingsId(data?.id || null);
     const customRoles: RoleConfig[] = data?.custom_roles || [];
     const defaults: RoleConfig[] = ['admin','manager','operator','viewer'].map(key => ({
       key,
@@ -59,7 +56,11 @@ export default function FuncoesModule() {
       isCustom: false,
     }));
     setRoles([...defaults, ...customRoles]);
-  };
+  }, []);
+
+  useEffect(() => {
+    loadRoles();
+  }, [loadRoles]);
 
   const startEdit = (role: RoleConfig) => {
     setEditing(role);
@@ -86,31 +87,29 @@ export default function FuncoesModule() {
   };
 
   const save = async () => {
-    if (!editPerms) return;
+    if (!editPerms || !companySettingsId) return;
     setSaving(true);
 
     if (showNew) {
       // Criar nova função customizada
       const key = `custom_${Date.now()}`;
       const newRole: RoleConfig = { key, label: editLabel || 'Nova Função', description: editDesc, permissions: editPerms, isCustom: true };
-      const { data } = await supabase.from('company_settings').select('custom_roles').single();
+      const { data } = await supabase.from('company_settings').select('custom_roles').eq('id', companySettingsId).single();
       const current = data?.custom_roles || [];
-      await supabase.from('company_settings').update({ custom_roles: [...current, newRole] });
+      await supabase.from('company_settings').update({ custom_roles: [...current, newRole] }).eq('id', companySettingsId);
     } else if (editing) {
       if (editing.isCustom) {
         // Atualizar função customizada
-        const { data } = await supabase.from('company_settings').select('custom_roles').single();
+        const { data } = await supabase.from('company_settings').select('custom_roles').eq('id', companySettingsId).single();
         const current: RoleConfig[] = data?.custom_roles || [];
         const updated = current.map(r => r.key === editing.key ? { ...r, label: editLabel, description: editDesc, permissions: editPerms } : r);
-        await supabase.from('company_settings').update({ custom_roles: updated });
+        await supabase.from('company_settings').update({ custom_roles: updated }).eq('id', companySettingsId);
       } else {
         // Atualizar permissões padrão de um cargo existente
-        await supabase.from('user_profiles').select('id, permissions, role').eq('role', editing.key).then(async ({ data: users }) => {
-          // Não atualiza usuários existentes, só salva o padrão nas company_settings
-        });
-        const { data } = await supabase.from('company_settings').select('default_role_permissions').single();
+        // Não atualiza usuários existentes, só salva o padrão nas company_settings
+        const { data } = await supabase.from('company_settings').select('default_role_permissions').eq('id', companySettingsId).single();
         const current = data?.default_role_permissions || {};
-        await supabase.from('company_settings').update({ default_role_permissions: { ...current, [editing.key]: editPerms } });
+        await supabase.from('company_settings').update({ default_role_permissions: { ...current, [editing.key]: editPerms } }).eq('id', companySettingsId);
       }
     }
 
@@ -118,9 +117,10 @@ export default function FuncoesModule() {
   };
 
   const deleteCustom = async (key: string) => {
-    const { data } = await supabase.from('company_settings').select('custom_roles').single();
+    if (!companySettingsId) return;
+    const { data } = await supabase.from('company_settings').select('custom_roles').eq('id', companySettingsId).single();
     const current: RoleConfig[] = data?.custom_roles || [];
-    await supabase.from('company_settings').update({ custom_roles: current.filter(r => r.key !== key) });
+    await supabase.from('company_settings').update({ custom_roles: current.filter(r => r.key !== key) }).eq('id', companySettingsId);
     await loadRoles();
   };
 
