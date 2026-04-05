@@ -195,13 +195,19 @@ export default function WebhooksPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <h3 className="text-sm font-bold text-gray-900">{ep.name}</h3>
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full
-                            ${ep.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-500'}`}>
-                            {ep.is_active ? 'Ativo' : 'Inativo'}
-                          </span>
                           {ep.source_label && (
                             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
                               {ep.source_label}
+                            </span>
+                          )}
+                          {ep.default_category && (
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                              {ep.default_category}
+                            </span>
+                          )}
+                          {ep.default_platform && (
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
+                              {ep.default_platform}
                             </span>
                           )}
                         </div>
@@ -325,6 +331,8 @@ function WebhookFormModal({ isOpen, onClose, onSaved, editing, captureSources }:
   const { stages } = useFunnelStages(selectedFunnelId || undefined);
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [forms, setForms] = useState<{ id: string; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ name: string }[]>([]);
+  const [platforms, setPlatforms] = useState<{ name: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'config' | 'mapping'>('config');
   const [mappingRows, setMappingRows] = useState<{ source: string; crm: string }[]>([
@@ -335,6 +343,7 @@ function WebhookFormModal({ isOpen, onClose, onSaved, editing, captureSources }:
   const defaultSource = captureSources.find(s => s === 'Webhook') || captureSources[0] || '';
   const [form, setForm] = useState({
     name: 'Novo Webhook', source_label: defaultSource,
+    default_category: '', default_platform: '',
     form_id: '', form_name: '', funnel_id: '', funnel_name: '',
     stage_id: '', stage_label: '', assigned_to: '', assigned_name: '',
     duplicate_mode: 'ignore' as 'ignore' | 'update' | 'allow', is_active: true,
@@ -346,9 +355,16 @@ function WebhookFormModal({ isOpen, onClose, onSaved, editing, captureSources }:
       .then(({ data }) => setUsers(data || []));
     supabase.from('form_templates').select('id, name').order('name')
       .then(({ data }) => setForms(data || []));
+    supabase.from('creator_categories').select('name').eq('is_active', true).order('sort_order')
+      .then(({ data }) => setCategories(data || []));
+    supabase.from('platforms').select('name').eq('is_active', true).order('sort_order')
+      .then(({ data }) => setPlatforms(data || []));
+
     if (editing) {
       setForm({
         name: editing.name, source_label: editing.source_label || defaultSource,
+        default_category: editing.default_category || '',
+        default_platform: editing.default_platform || '',
         form_id: editing.form_id || '', form_name: editing.form_name || '',
         funnel_id: editing.funnel_id || '', funnel_name: editing.funnel_name || '',
         stage_id: editing.stage_id || '', stage_label: editing.stage_label || '',
@@ -360,6 +376,7 @@ function WebhookFormModal({ isOpen, onClose, onSaved, editing, captureSources }:
       if (rows.length > 0) setMappingRows(rows);
     } else {
       setForm(p => ({ ...p, name: 'Novo Webhook', source_label: defaultSource,
+        default_category: '', default_platform: '',
         form_id: '', form_name: '', funnel_id: '', funnel_name: '',
         stage_id: '', stage_label: '', assigned_to: '', assigned_name: '',
         duplicate_mode: 'ignore', is_active: true }));
@@ -373,11 +390,16 @@ function WebhookFormModal({ isOpen, onClose, onSaved, editing, captureSources }:
   const lbl = 'block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5';
 
   const handleSave = async () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || !form.default_category || !form.default_platform) {
+      alert('Por favor, preencha o nome, categoria e plataforma.');
+      return;
+    }
     setSaving(true);
     const ff = forms.find(f => f.id === form.form_id);
     const params = {
       name: form.name, source_label: form.source_label,
+      default_category: form.default_category,
+      default_platform: form.default_platform,
       form_id: form.form_id || undefined, form_name: ff?.name || 'Sem formulario',
       funnel_id: form.funnel_id || undefined, funnel_name: form.funnel_name || undefined,
       stage_id: form.stage_id || undefined, stage_label: form.stage_label || undefined,
@@ -402,133 +424,151 @@ function WebhookFormModal({ isOpen, onClose, onSaved, editing, captureSources }:
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">{editing ? 'Editar Webhook' : 'Novo Webhook'}</p>
-              <p className="text-[11px] text-gray-400">Configure como receber leads externos</p>
+              <p className="text-[11px] text-gray-400">Configure como receber os leads</p>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 cursor-pointer">
             <i className="ri-close-line text-gray-500"></i>
           </button>
         </div>
-        <div className="flex gap-1 px-6 pt-3 flex-shrink-0">
-          {[{ id: 'config', label: 'Configuracao', icon: 'ri-settings-3-line' }, { id: 'mapping', label: 'Mapeamento', icon: 'ri-git-branch-line' }].map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer ${activeTab === tab.id ? 'bg-violet-50 text-violet-700' : 'text-gray-500 hover:text-gray-700'}`}>
-              <i className={`${tab.icon} text-sm`}></i>{tab.label}
+
+        <div className="flex gap-1 px-6 pt-4 flex-shrink-0">
+          {[{ id: 'config', l: 'Configuracao', i: 'ri-settings-3-line' }, { id: 'mapping', l: 'Mapeamento', i: 'ri-git-branch-line' }].map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id as any)}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all cursor-pointer
+                ${activeTab === t.id ? 'bg-violet-50 text-violet-700' : 'text-gray-500 hover:text-gray-700'}`}>
+              <i className={`${t.i} text-sm`}></i>{t.l}
             </button>
           ))}
         </div>
+
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {activeTab === 'config' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={lbl}>Nome do Webhook</label>
+                  <label className={lbl}>Nome do Webhook <span className="text-rose-500">*</span></label>
                   <input type="text" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inp} />
                 </div>
                 <div>
-                  <label className={lbl}>Fonte de Captura</label>
+                  <label className={lbl}>Fonte de Captura <span className="text-rose-500">*</span></label>
                   <select value={form.source_label} onChange={e => setForm(p => ({ ...p, source_label: e.target.value }))} className={inp}>
-                    <option value="">Selecione uma fonte...</option>
                     {captureSources.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
-              <div>
-                <label className={lbl}>Formulario vinculado <span className="text-gray-400 font-normal normal-case">(opcional)</span></label>
-                <select value={form.form_id} onChange={e => { const f = forms.find(f => f.id === e.target.value); setForm(p => ({ ...p, form_id: e.target.value, form_name: f?.name || '' })); }} className={inp}>
-                  <option value="">Sem formulario especifico</option>
-                  {forms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                </select>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={lbl}>Categoria Padrao <span className="text-rose-500">*</span></label>
+                  <select value={form.default_category} onChange={e => setForm(p => ({ ...p, default_category: e.target.value }))} className={inp}>
+                    <option value="">Selecione...</option>
+                    {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={lbl}>Plataforma Padrao <span className="text-rose-500">*</span></label>
+                  <select value={form.default_platform} onChange={e => setForm(p => ({ ...p, default_platform: e.target.value }))} className={inp}>
+                    <option value="">Selecione...</option>
+                    {platforms.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                  </select>
+                </div>
               </div>
+
               <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 space-y-3">
-                <p className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><i className="ri-kanban-view text-[#004aad]"></i>Destino no Kanban</p>
+                <p className="text-xs font-semibold text-gray-600 flex items-center gap-1.5"><i className="ri-kanban-view text-violet-600"></i>Destino no Kanban</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={lbl}>Funil</label>
-                    <select value={form.funnel_id} onChange={e => { const f = funnels.find(f => f.id === e.target.value); setSelectedFunnelId(e.target.value); setForm(p => ({ ...p, funnel_id: e.target.value, funnel_name: f?.name || '', stage_id: '', stage_label: '' })); }} className={inp}>
-                      <option value="">Selecione o funil...</option>
+                    <select value={form.funnel_id} onChange={e => {
+                      const f = funnels.find(ff => ff.id === e.target.value);
+                      setSelectedFunnelId(e.target.value);
+                      setForm(p => ({ ...p, funnel_id: e.target.value, funnel_name: f?.name || '', stage_id: '', stage_label: '' }));
+                    }} className={inp}>
+                      <option value="">Selecione...</option>
                       {funnels.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className={lbl}>Etapa inicial</label>
-                    <select value={form.stage_id} onChange={e => { const s = stages.find(s => s.id === e.target.value); setForm(p => ({ ...p, stage_id: e.target.value, stage_label: s?.label || '' })); }} disabled={!form.funnel_id} className={`${inp} disabled:opacity-50`}>
-                      <option value="">Selecione a etapa...</option>
+                    <label className={lbl}>Etapa</label>
+                    <select value={form.stage_id} onChange={e => {
+                      const s = stages.find(ss => ss.id === e.target.value);
+                      setForm(p => ({ ...p, stage_id: e.target.value, stage_label: s?.label || '' }));
+                    }} disabled={!form.funnel_id} className={inp}>
+                      <option value="">Selecione...</option>
                       {stages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                     </select>
                   </div>
                 </div>
                 <div>
-                  <label className={lbl}>Responsavel automatico</label>
-                  <select value={form.assigned_to} onChange={e => { const u = users.find(u => u.id === e.target.value); setForm(p => ({ ...p, assigned_to: e.target.value, assigned_name: u?.full_name || '' })); }} className={inp}>
+                  <label className={lbl}>Responsavel</label>
+                  <select value={form.assigned_to} onChange={e => {
+                    const u = users.find(uu => uu.id === e.target.value);
+                    setForm(p => ({ ...p, assigned_to: e.target.value, assigned_name: u?.full_name || '' }));
+                  }} className={inp}>
                     <option value="">Sem responsavel</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
                   </select>
                 </div>
               </div>
+
               <div>
-                <label className={lbl}>Comportamento para duplicatas</label>
-                <div className="space-y-2">
+                <label className={lbl}>Duplicatas</label>
+                <div className="grid grid-cols-1 gap-2">
                   {DUPLICATE_OPTIONS.map(opt => (
                     <button key={opt.value} type="button" onClick={() => setForm(p => ({ ...p, duplicate_mode: opt.value as any }))}
-                      className={`w-full text-left px-4 py-3 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3 ${form.duplicate_mode === opt.value ? 'border-violet-400 bg-violet-50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
-                      <i className={`${opt.icon} text-lg mt-0.5 ${form.duplicate_mode === opt.value ? 'text-violet-600' : 'text-gray-400'}`}></i>
-                      <div>
-                        <p className={`text-sm font-medium ${form.duplicate_mode === opt.value ? 'text-violet-800' : 'text-gray-700'}`}>{opt.label}</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">{opt.desc}</p>
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all cursor-pointer
+                        ${form.duplicate_mode === opt.value ? 'border-violet-400 bg-violet-50' : 'border-gray-100 hover:border-gray-200 bg-white'}`}>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${form.duplicate_mode === opt.value ? 'bg-violet-100 text-violet-600' : 'bg-gray-50 text-gray-400'}`}>
+                        <i className={opt.icon}></i>
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-sm font-bold ${form.duplicate_mode === opt.value ? 'text-violet-900' : 'text-gray-700'}`}>{opt.label}</p>
+                        <p className="text-[10px] text-gray-400">{opt.desc}</p>
                       </div>
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-xl">
-                <div><p className="text-sm font-medium text-gray-700">Webhook ativo</p><p className="text-[11px] text-gray-400">Desative para pausar temporariamente</p></div>
-                <button type="button" onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))} className="cursor-pointer">
-                  <div className={`w-11 h-6 rounded-full transition-all relative ${form.is_active ? 'bg-emerald-500' : 'bg-gray-300'}`}>
-                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${form.is_active ? 'left-5' : 'left-0.5'}`}></div>
-                  </div>
-                </button>
-              </div>
             </div>
           )}
+
           {activeTab === 'mapping' && (
             <div className="space-y-4">
               <div className="bg-amber-50 border border-amber-100 rounded-xl p-3.5 flex items-start gap-2.5">
                 <i className="ri-information-line text-amber-500 text-lg mt-0.5"></i>
-                <div>
-                  <p className="text-sm font-medium text-amber-800">Como funciona</p>
-                  <p className="text-xs text-amber-600 mt-1">Campo da fonte: nome exato da chave no JSON. Campo no CRM: onde salvar no creator. Suporte a aninhamento: field_data.0.values.0</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 px-1">
-                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Campo da fonte (JSON)</p>
-                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Campo no CRM</p>
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  Mapeie os campos do JSON recebido para os campos do CRM. Use pontos para campos aninhados (ex: <code>user.email</code>).
+                </p>
               </div>
               <div className="space-y-2">
                 {mappingRows.map((row, i) => (
-                  <div key={i} className="grid grid-cols-2 gap-3 items-center">
-                    <input type="text" value={row.source} onChange={e => setMappingRows(prev => prev.map((r, idx) => idx === i ? { ...r, source: e.target.value } : r))} placeholder="ex: lead_name" className={`${inp} font-mono text-xs`} />
-                    <div className="flex items-center gap-2">
-                      <select value={row.crm} onChange={e => setMappingRows(prev => prev.map((r, idx) => idx === i ? { ...r, crm: e.target.value } : r))} className={inp}>
-                        {CRM_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                      </select>
-                      <button onClick={() => setMappingRows(prev => prev.filter((_, idx) => idx !== i))} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg cursor-pointer transition-all flex-shrink-0">
-                        <i className="ri-close-line text-sm"></i>
-                      </button>
-                    </div>
+                  <div key={i} className="flex items-center gap-2">
+                    <input type="text" value={row.source} onChange={e => setMappingRows(prev => prev.map((r, idx) => idx === i ? { ...r, source: e.target.value } : r))}
+                      placeholder="Campo JSON" className={inp} />
+                    <i className="ri-arrow-right-line text-gray-300"></i>
+                    <select value={row.crm} onChange={e => setMappingRows(prev => prev.map((r, idx) => idx === i ? { ...r, crm: e.target.value } : r))} className={inp}>
+                      {CRM_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                    </select>
+                    <button onClick={() => setMappingRows(prev => prev.filter((_, idx) => idx !== i))} className="w-9 h-9 flex items-center justify-center text-gray-300 hover:text-rose-500 cursor-pointer">
+                      <i className="ri-delete-bin-line"></i>
+                    </button>
                   </div>
                 ))}
+                <button onClick={() => setMappingRows(prev => [...prev, { source: '', crm: 'name' }])}
+                  className="w-full py-2 border-2 border-dashed border-gray-100 rounded-xl text-xs font-medium text-gray-400 hover:border-violet-200 hover:text-violet-600 transition-all cursor-pointer">
+                  + Adicionar campo
+                </button>
               </div>
-              <button onClick={() => setMappingRows(prev => [...prev, { source: '', crm: 'name' }])} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-violet-700 hover:bg-violet-50 rounded-lg cursor-pointer transition-colors">
-                <i className="ri-add-line text-sm"></i>Adicionar campo
-              </button>
             </div>
           )}
         </div>
-        <div className="flex gap-2 px-6 py-4 border-t border-gray-100 flex-shrink-0">
-          <button onClick={onClose} className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl cursor-pointer transition-colors">Cancelar</button>
-          <button onClick={handleSave} disabled={saving || !form.name.trim()} className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 rounded-xl cursor-pointer transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-            {saving ? <><i className="ri-loader-4-line animate-spin"></i>Salvando...</> : <><i className="ri-save-line"></i>{editing ? 'Salvar alteracoes' : 'Criar Webhook'}</>}
+
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 flex-shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer">Cancelar</button>
+          <button onClick={handleSave} disabled={saving}
+            className="px-6 py-2 text-sm font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-xl shadow-lg shadow-violet-200 transition-all cursor-pointer disabled:opacity-50">
+            {saving ? 'Salvando...' : 'Salvar Webhook'}
           </button>
         </div>
       </div>
@@ -539,44 +579,54 @@ function WebhookFormModal({ isOpen, onClose, onSaved, editing, captureSources }:
 function LogsDrawer({ endpoint, onClose }: { endpoint: WebhookEndpoint; onClose: () => void }) {
   const { logs, fetchLogs } = useWebhookEndpoints();
   const [loading, setLoading] = useState(true);
-  useEffect(() => { setLoading(true); fetchLogs(endpoint.id, 100).then(() => setLoading(false)); }, [endpoint.id]);
-  const fmt = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+  useEffect(() => {
+    fetchLogs(endpoint.id).then(() => setLoading(false));
+  }, [endpoint.id, fetchLogs]);
+
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex justify-end">
-      <div className="w-full max-w-xl bg-white h-full flex flex-col shadow-2xl">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
-          <div><p className="text-sm font-bold text-gray-900">Logs - {endpoint.name}</p><p className="text-[11px] text-gray-400">Ultimas 100 chamadas</p></div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => fetchLogs(endpoint.id, 100)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"><i className="ri-refresh-line text-sm"></i>Atualizar</button>
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 cursor-pointer"><i className="ri-close-line text-gray-500"></i></button>
+    <div className="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl z-[60] flex flex-col animate-slide-in">
+      <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900">Logs de Atividade</h3>
+          <p className="text-[11px] text-gray-400">{endpoint.name}</p>
+        </div>
+        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 cursor-pointer">
+          <i className="ri-close-line text-gray-500"></i>
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6">
+        {loading ? (
+          <div className="flex items-center justify-center py-10"><i className="ri-loader-4-line text-2xl text-violet-400 animate-spin"></i></div>
+        ) : logs.length === 0 ? (
+          <div className="text-center py-10">
+            <p className="text-sm text-gray-400">Nenhum log registrado ainda</p>
           </div>
-        </div>
-        <div className="grid grid-cols-4 gap-2 px-6 py-3 border-b border-gray-100 flex-shrink-0">
-          {[{ label: 'Total', value: logs.length, color: 'text-gray-700' }, { label: 'Criados', value: logs.filter(l => l.status === 'created').length, color: 'text-emerald-700' }, { label: 'Duplicatas', value: logs.filter(l => l.status === 'duplicate').length, color: 'text-amber-700' }, { label: 'Erros', value: logs.filter(l => l.status === 'error').length, color: 'text-rose-700' }].map(s => (
-            <div key={s.label} className="text-center"><p className={`text-lg font-bold ${s.color}`}>{s.value}</p><p className="text-[10px] text-gray-400">{s.label}</p></div>
-          ))}
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
-          {loading ? <div className="flex items-center justify-center py-12"><i className="ri-loader-4-line text-2xl text-violet-400 animate-spin"></i></div> :
-           logs.length === 0 ? <div className="flex flex-col items-center justify-center py-16"><i className="ri-inbox-line text-2xl text-gray-300 mb-2"></i><p className="text-sm text-gray-400">Nenhuma chamada ainda</p></div> :
-           logs.map(log => {
-             const cfg = STATUS_CONFIG[log.status] || STATUS_CONFIG.received;
-             return (
-               <details key={log.id} className="bg-white border border-gray-100 rounded-xl overflow-hidden group">
-                 <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 list-none">
-                   <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md flex-shrink-0 ${cfg.color}`}><i className={`${cfg.icon} text-[10px]`}></i>{cfg.label}</span>
-                   <div className="flex-1 min-w-0"><p className="text-sm font-medium text-gray-800 truncate">{log.client_name || 'Lead nao identificado'}</p>{log.error_message && <p className="text-[11px] text-rose-500 truncate">{log.error_message}</p>}</div>
-                   <span className="text-[11px] text-gray-400 flex-shrink-0">{fmt(log.created_at)}</span>
-                   <i className="ri-arrow-down-s-line text-gray-400 transition-transform group-open:rotate-180 flex-shrink-0"></i>
-                 </summary>
-                 <div className="border-t border-gray-100 px-4 py-3">
-                   {log.client_id && <p className="text-xs text-gray-500 font-mono mb-2">Creator: {log.client_id}</p>}
-                   <pre className="text-[11px] font-mono text-gray-700 bg-gray-50 rounded-lg p-3 overflow-x-auto max-h-40">{JSON.stringify(log.payload, null, 2)}</pre>
-                 </div>
-               </details>
-             );
-           })}
-        </div>
+        ) : (
+          <div className="space-y-4">
+            {logs.map(log => (
+              <div key={log.id} className="border border-gray-100 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_CONFIG[log.status]?.color || 'bg-gray-100'}`}>
+                    {STATUS_CONFIG[log.status]?.label || log.status}
+                  </span>
+                  <span className="text-[10px] text-gray-400">{new Date(log.created_at).toLocaleString()}</span>
+                </div>
+                {log.client_name && <p className="text-xs font-semibold text-gray-700">Creator: {log.client_name}</p>}
+                {log.error_message && <p className="text-[10px] text-rose-600 bg-rose-50 p-2 rounded-lg">{log.error_message}</p>}
+                <details className="group">
+                  <summary className="text-[10px] font-bold text-violet-600 cursor-pointer list-none flex items-center gap-1">
+                    <i className="ri-arrow-right-s-line group-open:rotate-90 transition-transform"></i> Ver Payload JSON
+                  </summary>
+                  <pre className="mt-2 p-3 bg-gray-900 text-emerald-400 text-[10px] rounded-lg overflow-x-auto font-mono">
+                    {JSON.stringify(log.payload, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
