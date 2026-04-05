@@ -43,6 +43,8 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
   const { stages } = useFunnelStages(selectedFunnelId || undefined);
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [captureSources, setCaptureSources] = useState<{ name: string }[]>([]);
+  const [categories, setCategories] = useState<{ name: string }[]>([]);
+  const [platforms, setPlatforms] = useState<{ name: string }[]>([]);
 
   const [saving, setSaving]       = useState(false);
   const [copied, setCopied]       = useState(false);
@@ -56,41 +58,46 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
   ]);
 
   const [form, setForm] = useState({
-    name:           'Webhook Principal',
-    source_label:   'Webhook',
-    funnel_id:      '',
-    funnel_name:    '',
-    stage_id:       '',
-    stage_label:    '',
-    assigned_to:    '',
-    assigned_name:  '',
-    duplicate_mode: 'ignore' as 'ignore' | 'update' | 'allow',
-    is_active:      true,
+    name:             'Webhook Principal',
+    source_label:     '',
+    default_category: '',
+    default_platform: '',
+    funnel_id:        '',
+    funnel_name:      '',
+    stage_id:         '',
+    stage_label:      '',
+    assigned_to:      '',
+    assigned_name:    '',
+    duplicate_mode:   'ignore' as 'ignore' | 'update' | 'allow',
+    is_active:        true,
   });
 
   useEffect(() => {
     if (!isOpen) return;
     loadUsers();
-    loadCaptureSources();
+    loadCadastros();
     if (editingEndpoint) {
       setForm({
-        name:           editingEndpoint.name,
-        source_label:   editingEndpoint.source_label || 'Webhook',
-        funnel_id:      editingEndpoint.funnel_id || '',
-        funnel_name:    editingEndpoint.funnel_name || '',
-        stage_id:       editingEndpoint.stage_id || '',
-        stage_label:    editingEndpoint.stage_label || '',
-        assigned_to:    editingEndpoint.assigned_to || '',
-        assigned_name:  editingEndpoint.assigned_name || '',
-        duplicate_mode: editingEndpoint.duplicate_mode,
-        is_active:      editingEndpoint.is_active,
+        name:             editingEndpoint.name,
+        source_label:     editingEndpoint.source_label || '',
+        default_category: editingEndpoint.default_category || '',
+        default_platform: editingEndpoint.default_platform || '',
+        funnel_id:        editingEndpoint.funnel_id || '',
+        funnel_name:      editingEndpoint.funnel_name || '',
+        stage_id:         editingEndpoint.stage_id || '',
+        stage_label:      editingEndpoint.stage_label || '',
+        assigned_to:      editingEndpoint.assigned_to || '',
+        assigned_name:    editingEndpoint.assigned_name || '',
+        duplicate_mode:   editingEndpoint.duplicate_mode,
+        is_active:        editingEndpoint.is_active,
       });
       setSelectedFunnelId(editingEndpoint.funnel_id || '');
       const rows = Object.entries(editingEndpoint.field_mapping || {}).map(([source, crm]) => ({ source, crm }));
       if (rows.length > 0) setMappingRows(rows);
     } else {
       setForm({
-        name: 'Webhook Principal', source_label: 'Webhook',
+        name: 'Webhook Principal', source_label: '',
+        default_category: '', default_platform: '',
         funnel_id: '', funnel_name: '', stage_id: '', stage_label: '',
         assigned_to: '', assigned_name: '', duplicate_mode: 'ignore', is_active: true,
       });
@@ -109,9 +116,15 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
     setUsers(data || []);
   };
 
-  const loadCaptureSources = async () => {
-    const { data } = await supabase.from('capture_sources').select('name').eq('is_active', true).order('sort_order');
-    setCaptureSources(data || []);
+  const loadCadastros = async () => {
+    const [sources, cats, plats] = await Promise.all([
+      supabase.from('capture_sources').select('name').eq('is_active', true).order('sort_order'),
+      supabase.from('creator_categories').select('name').eq('is_active', true).order('sort_order'),
+      supabase.from('platforms').select('name').eq('is_active', true).order('sort_order')
+    ]);
+    setCaptureSources(sources.data || []);
+    setCategories(cats.data || []);
+    setPlatforms(plats.data || []);
   };
 
   const handleFunnelChange = (funnelId: string) => {
@@ -145,22 +158,27 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || !form.source_label || !form.default_category || !form.default_platform) {
+      alert('Por favor, preencha o nome, fonte, categoria e plataforma.');
+      return;
+    }
     setSaving(true);
     const params = {
-      form_id:        formId || undefined,
-      form_name:      formName,
-      name:           form.name,
-      source_label:   form.source_label,
-      funnel_id:      form.funnel_id || undefined,
-      funnel_name:    form.funnel_name || undefined,
-      stage_id:       form.stage_id || undefined,
-      stage_label:    form.stage_label || undefined,
-      assigned_to:    form.assigned_to || undefined,
-      assigned_name:  form.assigned_name || undefined,
-      duplicate_mode: form.duplicate_mode,
-      field_mapping:  buildFieldMapping(),
-      is_active:      form.is_active,
+      form_id:          formId || undefined,
+      form_name:        formName,
+      name:             form.name,
+      source_label:     form.source_label,
+      default_category: form.default_category,
+      default_platform: form.default_platform,
+      funnel_id:        form.funnel_id || undefined,
+      funnel_name:      form.funnel_name || undefined,
+      stage_id:         form.stage_id || undefined,
+      stage_label:      form.stage_label || undefined,
+      assigned_to:      form.assigned_to || undefined,
+      assigned_name:    form.assigned_name || undefined,
+      duplicate_mode:   form.duplicate_mode,
+      field_mapping:    buildFieldMapping(),
+      is_active:        form.is_active,
     };
 
     if (editingEndpoint) {
@@ -246,18 +264,40 @@ export default function WebhookConfigModal({ isOpen, onClose, formId, formName, 
               {/* Nome e Fonte */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelClass}>Nome do Webhook</label>
+                  <label className={labelClass}>Nome do Webhook <span className="text-rose-500">*</span></label>
                   <input type="text" value={form.name}
                     onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                     placeholder="Ex: Facebook Lead Ads" className={inp} />
                 </div>
                 <div>
-                  <label className={labelClass}>Fonte de Captura Oficial</label>
+                  <label className={labelClass}>Fonte de Captura <span className="text-rose-500">*</span></label>
                   <select value={form.source_label}
                     onChange={e => setForm(p => ({ ...p, source_label: e.target.value }))}
                     className={inp}>
                     <option value="">Selecione uma fonte...</option>
                     {captureSources.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Categoria e Plataforma */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Categoria Padrão <span className="text-rose-500">*</span></label>
+                  <select value={form.default_category}
+                    onChange={e => setForm(p => ({ ...p, default_category: e.target.value }))}
+                    className={inp}>
+                    <option value="">Selecione a categoria...</option>
+                    {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Plataforma Padrão <span className="text-rose-500">*</span></label>
+                  <select value={form.default_platform}
+                    onChange={e => setForm(p => ({ ...p, default_platform: e.target.value }))}
+                    className={inp}>
+                    <option value="">Selecione a plataforma...</option>
+                    {platforms.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
                   </select>
                 </div>
               </div>

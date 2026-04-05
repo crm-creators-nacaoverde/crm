@@ -29,6 +29,8 @@ export interface WebhookEndpoint {
   duplicate_mode: 'ignore' | 'update' | 'allow';
   is_active: boolean;
   source_label: string | null;
+  default_category: string | null;
+  default_platform: string | null;
   created_at: string;
 }
 
@@ -78,6 +80,8 @@ export function useWebhookEndpoints(formId?: string) {
     field_mapping: Record<string, string>;
     duplicate_mode: 'ignore' | 'update' | 'allow';
     source_label?: string;
+    default_category?: string;
+    default_platform?: string;
   }): Promise<WebhookEndpoint | null> => {
     const { data, error } = await supabase
       .from('webhook_endpoints')

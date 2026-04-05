@@ -114,12 +114,12 @@ Deno.serve(async (req) => {
   const finalSource = normalizeMatch(rawSource, activeSources, activeSources.find(s => s.name === 'Webhook')?.name || activeSources[0]?.name || 'Webhook');
 
   // 3. Normalizar Categoria
-  const rawCategory = (mapped.category as string) || 'Creators';
+  const rawCategory = (mapped.category as string) || endpoint.default_category || 'Creators';
   const defaultCategory = activeCategories.find(c => c.is_default)?.name || activeCategories[0]?.name || 'Creators';
   const finalCategory = normalizeMatch(rawCategory, activeCategories, defaultCategory);
 
   // 4. Normalizar Plataforma
-  const rawPlatform = (mapped.platform as string) || 'TikTok';
+  const rawPlatform = (mapped.platform as string) || endpoint.default_platform || 'TikTok';
   const defaultPlatform = activePlatforms.find(p => p.is_default)?.name || activePlatforms[0]?.name || 'TikTok';
   const finalPlatform = normalizeMatch(rawPlatform, activePlatforms, defaultPlatform);
 
