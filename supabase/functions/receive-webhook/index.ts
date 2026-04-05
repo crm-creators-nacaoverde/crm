@@ -85,36 +85,43 @@ Deno.serve(async (req) => {
   const phone = (mapped.phone as string) || (payload.phone as string) || (payload.telefone as string) || '';
   const email = (mapped.email as string) || (payload.email as string) || '';
 
-  // ── Sincronização de Fonte de Captura ─────────────────────────────────────
-  // 1. Prioridade: campo mapeado 'capture_source'
-  // 2. Fallback: 'source_label' do endpoint
-  // 3. Fallback final: 'Webhook'
-  let rawSource = (mapped.capture_source as string) || endpoint.source_label || 'Webhook';
+  // ── Sincronização de Dados (Fonte, Categoria, Plataforma) ──────────────────
   
-  // Buscar fontes ativas no sistema para normalização
-  const { data: activeSources } = await supabase
-    .from('capture_sources')
-    .select('name')
-    .eq('is_active', true);
+  // 1. Buscar cadastros ativos para normalização
+  const [sourcesRes, categoriesRes, platformsRes] = await Promise.all([
+    supabase.from('capture_sources').select('name').eq('is_active', true),
+    supabase.from('creator_categories').select('name, is_default').eq('is_active', true),
+    supabase.from('platforms').select('name, is_default').eq('is_active', true)
+  ]);
 
-  let finalSource = 'Webhook'; // Default seguro
-  if (activeSources && activeSources.length > 0) {
-    // Tentar match exato ou case-insensitive
-    const match = activeSources.find(s => 
-      s.name.toLowerCase() === rawSource.toLowerCase() || 
-      s.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === 
-      rawSource.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  const activeSources = sourcesRes.data || [];
+  const activeCategories = categoriesRes.data || [];
+  const activePlatforms = platformsRes.data || [];
+
+  // Função auxiliar para normalizar texto e fazer match
+  const normalizeMatch = (value: string, list: { name: string }[], defaultValue: string) => {
+    if (!value) return defaultValue;
+    const normalizedValue = value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const match = list.find(item => 
+      item.name.toLowerCase() === value.toLowerCase() || 
+      item.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normalizedValue
     );
-    
-    if (match) {
-      finalSource = match.name;
-    } else {
-      // Se não houver match, verifica se a fonte padrão 'Webhook' existe
-      const webhookSource = activeSources.find(s => s.name === 'Webhook');
-      if (webhookSource) finalSource = 'Webhook';
-      else finalSource = activeSources[0].name; // Pega a primeira disponível se 'Webhook' não existir
-    }
-  }
+    return match ? match.name : defaultValue;
+  };
+
+  // 2. Normalizar Fonte
+  const rawSource = (mapped.capture_source as string) || endpoint.source_label || 'Webhook';
+  const finalSource = normalizeMatch(rawSource, activeSources, activeSources.find(s => s.name === 'Webhook')?.name || activeSources[0]?.name || 'Webhook');
+
+  // 3. Normalizar Categoria
+  const rawCategory = (mapped.category as string) || 'Creators';
+  const defaultCategory = activeCategories.find(c => c.is_default)?.name || activeCategories[0]?.name || 'Creators';
+  const finalCategory = normalizeMatch(rawCategory, activeCategories, defaultCategory);
+
+  // 4. Normalizar Plataforma
+  const rawPlatform = (mapped.platform as string) || 'TikTok';
+  const defaultPlatform = activePlatforms.find(p => p.is_default)?.name || activePlatforms[0]?.name || 'TikTok';
+  const finalPlatform = normalizeMatch(rawPlatform, activePlatforms, defaultPlatform);
 
   // ── Verificar duplicata ───────────────────────────────────────────────────
   let existingClient: { id: string; name: string } | null = null;
@@ -149,7 +156,9 @@ Deno.serve(async (req) => {
     } else if (existingClient && endpoint.duplicate_mode === 'update') {
       const updatePayload: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
-        capture_source: finalSource, // Atualiza a fonte também no update
+        capture_source: finalSource,
+        category: finalCategory,
+        platform: finalPlatform,
       };
       if (mapped.phone || phone) updatePayload.phone = mapped.phone || phone;
       if (mapped.email || email) updatePayload.email = mapped.email || email;
@@ -166,9 +175,9 @@ Deno.serve(async (req) => {
         email:    email || `${name.toLowerCase().replace(/\s+/g, '.')}@webhook.com`,
         phone:    phone || null,
         status:   'active',
-        category: (mapped.category as string) || 'Creators',
-        platform: (mapped.platform as string) || 'TikTok',
-        capture_source: finalSource, // Fonte normalizada
+        category: finalCategory,
+        platform: finalPlatform,
+        capture_source: finalSource,
         followers: (() => {
           const raw = String(mapped.followers || '0');
           const num = parseInt(raw, 10);
