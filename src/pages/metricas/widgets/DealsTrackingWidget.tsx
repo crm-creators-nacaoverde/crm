@@ -5,11 +5,19 @@ interface DealsStats {
   total: number;
   won: number;
   lost: number;
-  byFunnel: { name: string; count: number }[];
+  byFunnel: { id: string; name: string; count: number }[];
   byChannel: { name: string; count: number }[];
   bySource: { name: string; count: number }[];
   byPlatform: { name: string; count: number }[];
   byUser: { name: string; count: number }[];
+}
+
+interface FunnelStage {
+  id: string;
+  label: string;
+  color: string;
+  sort_order: number;
+  funnel_id: string;
 }
 
 interface Props {
@@ -17,9 +25,16 @@ interface Props {
 }
 
 export default function DealsTrackingWidget({ period = '30d' }: Props) {
+  const [view, setView] = useState<'general' | 'funnel'>('general');
   const [stats, setStats] = useState<DealsStats | null>(null);
+  const [funnels, setFunnels] = useState<{ id: string; name: string }[]>([]);
+  const [selectedFunnelId, setSelectedFunnelId] = useState<string>('');
+  const [stages, setStages] = useState<FunnelStage[]>([]);
+  const [dealsByStage, setDealsByStage] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [loadingFunnel, setLoadingFunnel] = useState(false);
 
+  // Carregar dados gerais
   useEffect(() => {
     const fetchDealsStats = async () => {
       setLoading(true);
@@ -29,7 +44,6 @@ export default function DealsTrackingWidget({ period = '30d' }: Props) {
       startDate.setDate(startDate.getDate() - days);
       const startDateIso = startDate.toISOString();
 
-      // 1. Buscar todos os negócios no período
       const { data: deals } = await supabase
         .from('deals')
         .select('*, clients(*), funnels(*)')
@@ -47,45 +61,43 @@ export default function DealsTrackingWidget({ period = '30d' }: Props) {
           byUser: [],
         };
 
-        const funnelMap: Record<string, number> = {};
+        const funnelMap: Record<string, { id: string; count: number }> = {};
         const channelMap: Record<string, number> = {};
         const sourceMap: Record<string, number> = {};
         const platformMap: Record<string, number> = {};
         const userMap: Record<string, number> = {};
 
         deals.forEach(deal => {
-          // Por Funil
-          const funnelName = deal.funnels?.name || 'Sem Funil';
-          funnelMap[funnelName] = (funnelMap[funnelName] || 0) + 1;
+          if (deal.funnels) {
+            const f = deal.funnels;
+            if (!funnelMap[f.name]) funnelMap[f.name] = { id: f.id, count: 0 };
+            funnelMap[f.name].count++;
+          }
 
-          // Por Usuário (Assigned To)
           const userName = deal.assigned_name || 'Não Atribuído';
           userMap[userName] = (userMap[userName] || 0) + 1;
 
-          // Dados do Cliente (Canal, Fonte, Plataforma)
           if (deal.clients) {
             const channel = deal.clients.whatsapp_group_link ? 'WhatsApp' : 'Outro';
             channelMap[channel] = (channelMap[channel] || 0) + 1;
-
             const source = deal.clients.capture_source || 'Direto / Outros';
             sourceMap[source] = (sourceMap[source] || 0) + 1;
-
             const platform = deal.clients.platform || 'Não Informada';
             platformMap[platform] = (platformMap[platform] || 0) + 1;
-          } else {
-            channelMap['Sem Cliente'] = (channelMap['Sem Cliente'] || 0) + 1;
-            sourceMap['Sem Cliente'] = (sourceMap['Sem Cliente'] || 0) + 1;
-            platformMap['Sem Cliente'] = (platformMap['Sem Cliente'] || 0) + 1;
           }
         });
 
-        statsObj.byFunnel = Object.entries(funnelMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+        statsObj.byFunnel = Object.entries(funnelMap).map(([name, data]) => ({ id: data.id, name, count: data.count })).sort((a, b) => b.count - a.count);
         statsObj.byChannel = Object.entries(channelMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
         statsObj.bySource = Object.entries(sourceMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
         statsObj.byPlatform = Object.entries(platformMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
         statsObj.byUser = Object.entries(userMap).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 
         setStats(statsObj);
+        setFunnels(statsObj.byFunnel.map(f => ({ id: f.id, name: f.name })));
+        if (statsObj.byFunnel.length > 0 && !selectedFunnelId) {
+          setSelectedFunnelId(statsObj.byFunnel[0].id);
+        }
       }
       setLoading(false);
     };
@@ -93,13 +105,42 @@ export default function DealsTrackingWidget({ period = '30d' }: Props) {
     fetchDealsStats();
   }, [period]);
 
+  // Carregar etapas e negócios do funil selecionado
+  useEffect(() => {
+    if (view === 'funnel' && selectedFunnelId) {
+      const fetchFunnelData = async () => {
+        setLoadingFunnel(true);
+        
+        const days = parseInt(period.replace('d', ''));
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        const startDateIso = startDate.toISOString();
+
+        const [stagesRes, dealsRes] = await Promise.all([
+          supabase.from('funnel_stages').select('*').eq('funnel_id', selectedFunnelId).order('sort_order', { ascending: true }),
+          supabase.from('deals').select('stage').eq('funnel_id', selectedFunnelId).gte('created_at', startDateIso)
+        ]);
+
+        if (stagesRes.data) setStages(stagesRes.data);
+        
+        if (dealsRes.data) {
+          const counts: Record<string, number> = {};
+          dealsRes.data.forEach(d => {
+            counts[d.stage] = (counts[d.stage] || 0) + 1;
+          });
+          setDealsByStage(counts);
+        }
+        setLoadingFunnel(false);
+      };
+      fetchFunnelData();
+    }
+  }, [view, selectedFunnelId, period]);
+
   if (loading) return (
-    <div className="bg-white rounded-xl border border-gray-100 p-5 h-[400px] flex items-center justify-center">
+    <div className="bg-white rounded-xl border border-gray-100 p-5 h-[420px] flex items-center justify-center">
       <div className="w-6 h-6 border-2 border-[#004aad] border-t-transparent rounded-full animate-spin"></div>
     </div>
   );
-
-  if (!stats) return null;
 
   const MetricRow = ({ label, value, total }: { label: string; value: number; total: number }) => (
     <div className="flex items-center justify-between py-1.5">
@@ -127,51 +168,133 @@ export default function DealsTrackingWidget({ period = '30d' }: Props) {
   );
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 p-5 h-full overflow-hidden flex flex-col">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-white rounded-xl border border-gray-100 p-5 h-full overflow-hidden flex flex-col min-h-[420px]">
+      {/* Header com Toggle de Dobra */}
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-            <i className="ri-shake-hands-line text-base text-blue-600"></i>
+            <i className={`ri-${view === 'general' ? 'shake-hands-line' : 'filter-3-line'} text-base text-blue-600`}></i>
           </div>
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Acompanhamento de Negócios</h3>
-            <p className="text-[10px] text-gray-400">Métricas de conversão e distribuição</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <button 
+                onClick={() => setView('general')}
+                className={`text-[10px] uppercase font-bold tracking-wider transition-colors ${view === 'general' ? 'text-[#004aad]' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                Geral
+              </button>
+              <span className="text-gray-300 text-[10px]">|</span>
+              <button 
+                onClick={() => setView('funnel')}
+                className={`text-[10px] uppercase font-bold tracking-wider transition-colors ${view === 'funnel' ? 'text-[#004aad]' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                Por Etapas
+              </button>
+            </div>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-xl font-bold text-gray-900">{stats.total}</p>
+          <p className="text-xl font-bold text-gray-900">{stats?.total || 0}</p>
           <p className="text-[10px] text-gray-400 uppercase font-bold">Total Geral</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
-          <p className="text-[10px] font-bold text-emerald-700 uppercase mb-1">Ganhos</p>
-          <div className="flex items-baseline gap-2">
-            <span className="text-lg font-bold text-emerald-900">{stats.won}</span>
-            <span className="text-[10px] text-emerald-600 font-medium">
-              {stats.total > 0 ? Math.round((stats.won / stats.total) * 100) : 0}%
-            </span>
+      {view === 'general' ? (
+        <>
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+              <p className="text-[10px] font-bold text-emerald-700 uppercase mb-1">Ganhos</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-lg font-bold text-emerald-900">{stats?.won || 0}</span>
+                <span className="text-[10px] text-emerald-600 font-medium">
+                  {stats && stats.total > 0 ? Math.round((stats.won / stats.total) * 100) : 0}%
+                </span>
+              </div>
+            </div>
+            <div className="bg-rose-50 rounded-xl p-3 border border-rose-100">
+              <p className="text-[10px] font-bold text-rose-700 uppercase mb-1">Perdidos</p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-lg font-bold text-rose-900">{stats?.lost || 0}</span>
+                <span className="text-[10px] text-rose-600 font-medium">
+                  {stats && stats.total > 0 ? Math.round((stats.lost / stats.total) * 100) : 0}%
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="bg-rose-50 rounded-xl p-3 border border-rose-100">
-          <p className="text-[10px] font-bold text-rose-700 uppercase mb-1">Perdidos</p>
-          <div className="flex items-baseline gap-2">
-            <span className="text-lg font-bold text-rose-900">{stats.lost}</span>
-            <span className="text-[10px] text-rose-600 font-medium">
-              {stats.total > 0 ? Math.round((stats.lost / stats.total) * 100) : 0}%
-            </span>
-          </div>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-6 overflow-y-auto pr-1 custom-scrollbar">
-        <Section title="Por Funil" data={stats.byFunnel} total={stats.total} />
-        <Section title="Por Usuário" data={stats.byUser} total={stats.total} />
-        <Section title="Por Canal" data={stats.byChannel} total={stats.total} />
-        <Section title="Por Fonte" data={stats.bySource} total={stats.total} />
-        <Section title="Por Plataforma" data={stats.byPlatform} total={stats.total} />
-      </div>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-6 overflow-y-auto pr-1 custom-scrollbar flex-1">
+            <Section title="Por Funil" data={stats?.byFunnel || []} total={stats?.total || 0} />
+            <Section title="Por Usuário" data={stats?.byUser || []} total={stats?.total || 0} />
+            <Section title="Por Canal" data={stats?.byChannel || []} total={stats?.total || 0} />
+            <Section title="Por Fonte" data={stats?.bySource || []} total={stats?.total || 0} />
+            <Section title="Por Plataforma" data={stats?.byPlatform || []} total={stats?.total || 0} />
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col flex-1">
+          {/* Seletor de Funil */}
+          <div className="mb-4">
+            <select 
+              value={selectedFunnelId}
+              onChange={(e) => setSelectedFunnelId(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#004aad]/20 focus:border-[#004aad] transition-all"
+            >
+              {funnels.map(f => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {loadingFunnel ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="w-5 h-5 border-2 border-[#004aad] border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-4">
+              {stages.length > 0 ? (
+                stages.map((stage) => {
+                  const count = dealsByStage[stage.id] || 0;
+                  const totalInFunnel = Object.values(dealsByStage).reduce((a, b) => a + b, 0);
+                  const pct = totalInFunnel > 0 ? Math.round((count / totalInFunnel) * 100) : 0;
+
+                  return (
+                    <div key={stage.id} className="group">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }}></div>
+                          <span className="text-xs font-semibold text-gray-700 truncate">{stage.label}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs font-bold text-gray-900">{count}</span>
+                          <span className="text-[10px] text-gray-400 w-8 text-right">{pct}%</span>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full rounded-full transition-all duration-500" 
+                          style={{ width: `${pct}%`, backgroundColor: stage.color }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <i className="ri-inbox-line text-2xl text-gray-200 mb-2"></i>
+                  <p className="text-xs text-gray-400">Nenhuma etapa encontrada para este funil.</p>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <div className="mt-4 pt-3 border-t border-gray-50">
+            <p className="text-[10px] text-gray-400 italic text-center">
+              As etapas são carregadas dinamicamente conforme configuradas no funil.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
