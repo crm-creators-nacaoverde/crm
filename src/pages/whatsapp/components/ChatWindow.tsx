@@ -194,14 +194,6 @@ export default function ChatWindow({
                               controls 
                               className="flex-1 h-10 relative z-20"
                               preload="metadata"
-                              onError={(e) => {
-                                console.error('Erro ao carregar áudio:', e);
-                                const target = e.currentTarget;
-                                if (target.src) {
-                                  // Tentar forçar o carregamento novamente sem crossOrigin
-                                  target.load();
-                                }
-                              }}
                             >
                               Seu navegador não suporta o elemento de áudio.
                             </audio>
