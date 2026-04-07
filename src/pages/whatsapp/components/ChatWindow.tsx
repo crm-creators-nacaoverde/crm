@@ -187,11 +187,12 @@ export default function ChatWindow({
                         </p>
                       )}
                       {msg.message_type === 'audio' && msg.media_url ? (
-                        <div className="mb-2 min-w-[240px] py-1">
+                        <div className="mb-2 min-w-[260px] py-1 relative z-10" style={{ pointerEvents: 'auto' }}>
                           <audio 
                             controls 
-                            className="w-full h-10"
+                            className="w-full h-10 relative z-20"
                             preload="metadata"
+                            style={{ display: 'block' }}
                           >
                             <source src={msg.media_url} type="audio/webm" />
                             <source src={msg.media_url} type="audio/ogg" />
