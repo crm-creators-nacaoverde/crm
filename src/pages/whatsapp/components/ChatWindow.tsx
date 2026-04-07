@@ -190,9 +190,11 @@ export default function ChatWindow({
                         <div className="mb-2 min-w-[260px] py-1 relative z-10" style={{ pointerEvents: 'auto' }}>
                           <audio 
                             controls 
+                            crossOrigin="anonymous"
                             className="w-full h-10 relative z-20"
-                            preload="metadata"
+                            preload="auto"
                             style={{ display: 'block' }}
+                            onError={(e) => console.error('Erro ao carregar áudio:', e)}
                           >
                             <source src={msg.media_url} type="audio/webm" />
                             <source src={msg.media_url} type="audio/ogg" />
