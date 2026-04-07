@@ -8,6 +8,7 @@ interface Props {
 export default function AudioRecorder({ onAudioRecorded, isLoading = false }: Props) {
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
+  const durationRef = useRef(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -37,7 +38,7 @@ export default function AudioRecorder({ onAudioRecorded, isLoading = false }: Pr
         mimeType = 'audio/webm;codecs=opus';
       }
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      const recorder = new MediaRecorder(stream, { mimeType });
 
       chunksRef.current = [];
       mediaRecorder.ondataavailable = (e) => {
@@ -45,19 +46,27 @@ export default function AudioRecorder({ onAudioRecorded, isLoading = false }: Pr
       };
 
       mediaRecorder.onstop = () => {
+        const finalDuration = durationRef.current;
         const blob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType });
-        onAudioRecorded(blob, duration);
+        console.log(`Gravação finalizada: ${blob.size} bytes, ${finalDuration}s`);
+        onAudioRecorded(blob, finalDuration);
         setDuration(0);
+        durationRef.current = 0;
       };
 
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
       setIsRecording(true);
       setDuration(0);
+      durationRef.current = 0;
 
       // Timer
       timerRef.current = setInterval(() => {
-        setDuration(prev => prev + 1);
+        setDuration(prev => {
+          const next = prev + 1;
+          durationRef.current = next;
+          return next;
+        });
       }, 1000);
     } catch (error) {
       console.error('Erro ao acessar microfone:', error);
