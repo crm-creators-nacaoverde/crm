@@ -41,21 +41,21 @@ export default function AudioRecorder({ onAudioRecorded, isLoading = false }: Pr
       const recorder = new MediaRecorder(stream, { mimeType });
 
       chunksRef.current = [];
-      mediaRecorder.ondataavailable = (e) => {
+      recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      mediaRecorder.onstop = () => {
+      recorder.onstop = () => {
         const finalDuration = durationRef.current;
-        const blob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType });
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
         console.log(`Gravação finalizada: ${blob.size} bytes, ${finalDuration}s`);
         onAudioRecorded(blob, finalDuration);
         setDuration(0);
         durationRef.current = 0;
       };
 
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
+      mediaRecorderRef.current = recorder;
+      recorder.start();
       setIsRecording(true);
       setDuration(0);
       durationRef.current = 0;
