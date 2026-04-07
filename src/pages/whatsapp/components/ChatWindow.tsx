@@ -187,13 +187,21 @@ export default function ChatWindow({
                         </p>
                       )}
                       {msg.message_type === 'audio' && msg.media_url ? (
-                        <div className="mb-2">
-                          <audio controls className="w-full h-8 rounded">
+                        <div className="mb-2 min-w-[200px]">
+                          <audio 
+                            controls 
+                            className={`w-full h-8 rounded ${isOut ? 'filter invert brightness-200' : ''}`}
+                            preload="metadata"
+                          >
                             <source src={msg.media_url} type="audio/webm" />
+                            <source src={msg.media_url} type="audio/ogg" />
+                            <source src={msg.media_url} type="audio/mpeg" />
                             Seu navegador não suporta o elemento de áudio.
                           </audio>
                           {msg.body && (
-                            <p className="text-xs italic mt-1 opacity-75">{msg.body}</p>
+                            <p className={`text-[10px] italic mt-1 opacity-75 ${isOut ? 'text-emerald-50' : 'text-gray-500'}`}>
+                              {msg.body}
+                            </p>
                           )}
                         </div>
                       ) : (
