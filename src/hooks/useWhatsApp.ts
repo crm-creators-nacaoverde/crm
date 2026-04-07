@@ -171,18 +171,24 @@ export function useWhatsApp() {
 
     setSending(true);
     try {
-      // Converter Blob para base64
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => {
+      console.log(`Enviando áudio: ${audioBlob.size} bytes, duração: ${duration}s`);
+      
+      if (audioBlob.size < 100) {
+        console.error('Áudio muito pequeno ou vazio. Abortando envio.');
+        return false;
+      }
+
+      // Converter Blob para base64 de forma robusta
+      const base64Audio = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
           const result = reader.result as string;
           const base64 = result.split(',')[1];
           resolve(base64);
         };
         reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
       });
-      reader.readAsDataURL(audioBlob);
-      const base64Audio = await base64Promise;
 
       const n8nUrl = 'https://n8n.metodoia.com.br/webhook/wa-enviar';
       const response = await fetch(n8nUrl, {
