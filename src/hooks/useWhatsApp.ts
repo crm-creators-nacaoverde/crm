@@ -73,13 +73,15 @@ export function useWhatsApp() {
       .select('*')
       .order('last_message_at', { ascending: false });
 
+    const userId = profile?.id;
+
     if (isAdmin) {
       if (filter === 'closed') {
         query = query.eq('status', 'closed');
       } else if (filter === 'pending') {
         query = query.eq('status', 'pending');
-      } else if (filter === 'mine') {
-        query = query.eq('assigned_to', profile?.id).neq('status', 'closed');
+      } else if (filter === 'mine' && userId) {
+        query = query.eq('assigned_to', userId).neq('status', 'closed');
       } else {
         query = query.neq('status', 'closed');
       }
@@ -87,10 +89,12 @@ export function useWhatsApp() {
       query = query.neq('status', 'closed');
       if (filter === 'pending') {
         query = query.is('assigned_to', null).eq('status', 'pending');
-      } else if (filter === 'mine') {
-        query = query.eq('assigned_to', profile?.id);
+      } else if (filter === 'mine' && userId) {
+        query = query.eq('assigned_to', userId);
+      } else if (userId) {
+        query = query.or(`assigned_to.is.null,assigned_to.eq.${userId}`);
       } else {
-        query = query.or(`assigned_to.is.null,assigned_to.eq.${profile?.id}`);
+        query = query.is('assigned_to', null);
       }
     }
 
