@@ -159,6 +159,49 @@ export function useWhatsApp() {
     return conv.assigned_to === profile?.id;
   }, [isAdmin, profile?.id]);
 
+  // ── Enviar áudio via N8N ────────────────────────────────────────────────────
+  const sendAudio = useCallback(async (audioBlob: Blob, duration: number): Promise<boolean> => {
+    if (!activeConvId) return false;
+    const conv = conversations.find(c => c.id === activeConvId);
+    if (!canReply(conv || null)) return false;
+
+    setSending(true);
+    try {
+      // Converter Blob para base64
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          const base64 = result.split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(audioBlob);
+      const base64Audio = await base64Promise;
+
+      const n8nUrl = 'https://n8n.metodoia.com.br/webhook-test/wa-enviar';
+      const response = await fetch(n8nUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: activeConvId,
+          remote_jid: conv?.remote_jid,
+          message_type: 'audio',
+          audio_base64: base64Audio,
+          audio_duration: duration,
+          sent_by: user?.id || null,
+          sent_by_name: profile?.full_name || user?.email || 'Especialista',
+        }),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Erro ao enviar áudio:', error);
+      return false;
+    }
+    finally { setSending(false); }
+  }, [activeConvId, conversations, canReply, user, profile]);
+
   // ── Enviar mensagem via N8N ───────────────────────────────────────────────
   const sendMessage = useCallback(async (text: string): Promise<boolean> => {
     if (!activeConvId || !text.trim()) return false;
@@ -338,6 +381,7 @@ export function useWhatsApp() {
     setFilter,
     selectConversation,
     sendMessage,
+    sendAudio,
     assignConversation,
     transferConversation,
     linkClient,

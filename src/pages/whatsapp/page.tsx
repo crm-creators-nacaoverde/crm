@@ -17,7 +17,7 @@ export default function WhatsAppPage() {
   const {
     conversations, messages, activeConvId, activeConversation,
     loading, loadingMessages, sending, filter, totalUnread, isAdmin,
-    setFilter, selectConversation, sendMessage,
+    setFilter, selectConversation, sendMessage, sendAudio,
     assignConversation, transferConversation, linkClient, closeConversation, startConversation,
     loadConversations,
   } = useWhatsApp();
@@ -158,6 +158,7 @@ export default function WhatsAppPage() {
             sending={sending}
             currentUserId={user?.id}
             onSend={sendMessage}
+            onSendAudio={sendAudio}
             onClose={() => setShowCloseConv(true)}
             onAssignToMe={handleAssignToMe}
             onLinkCreator={() => setShowLinkModal(true)}

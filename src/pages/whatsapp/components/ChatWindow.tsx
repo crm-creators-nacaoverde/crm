@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { WaConversation, WaMessage } from '../../../hooks/useWhatsApp';
+import AudioRecorder from './AudioRecorder';
 
 interface Props {
   conversation: WaConversation | null;
@@ -8,6 +9,7 @@ interface Props {
   sending: boolean;
   currentUserId: string | undefined;
   onSend: (text: string) => Promise<boolean>;
+  onSendAudio: (audioBlob: Blob, duration: number) => Promise<boolean>;
   onClose: () => void;
   onAssignToMe: () => void;
   onLinkCreator: () => void;
@@ -30,11 +32,12 @@ function formatDate(iso: string): string {
 
 export default function ChatWindow({
   conversation, messages, loadingMessages, sending,
-  currentUserId, onSend, onClose, onAssignToMe, onLinkCreator, onTransfer, isAdmin,
+  currentUserId, onSend, onSendAudio, onClose, onAssignToMe, onLinkCreator, onTransfer, isAdmin,
 }: Props) {
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef  = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Scroll automático ao final
   useEffect(() => {
@@ -51,6 +54,24 @@ export default function ChatWindow({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  const handleAudioRecorded = async (blob: Blob, duration: number) => {
+    await onSendAudio(blob, duration);
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validar se é arquivo de áudio
+    if (!file.type.startsWith('audio/')) {
+      alert('Por favor, selecione um arquivo de áudio válido.');
+      return;
+    }
+
+    await onSendAudio(file, 0);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   if (!conversation) {
@@ -160,13 +181,25 @@ export default function ChatWindow({
                           <span className="text-[11px] capitalize">{msg.message_type}</span>
                         </div>
                       )}
-	                      {isOut && msg.sent_by_name && (
-	                        <p className="text-[10px] font-bold mb-1 opacity-80 uppercase tracking-wider">
-	                          Especialista ({msg.sent_by_name})
-	                        </p>
-	                      )}
-	                      <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.body}</p>
-	                      <div className={`flex items-center gap-1 mt-1 ${isOut ? 'justify-end' : 'justify-start'}`}>
+                      {isOut && msg.sent_by_name && (
+                        <p className="text-[10px] font-bold mb-1 opacity-80 uppercase tracking-wider">
+                          Especialista ({msg.sent_by_name})
+                        </p>
+                      )}
+                      {msg.message_type === 'audio' && msg.media_url ? (
+                        <div className="mb-2">
+                          <audio controls className="w-full h-8 rounded">
+                            <source src={msg.media_url} type="audio/webm" />
+                            Seu navegador não suporta o elemento de áudio.
+                          </audio>
+                          {msg.body && (
+                            <p className="text-xs italic mt-1 opacity-75">{msg.body}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.body}</p>
+                      )}
+                      <div className={`flex items-center gap-1 mt-1 ${isOut ? 'justify-end' : 'justify-start'}`}>
                         <span className={`text-[10px] ${isOut ? 'text-emerald-100' : 'text-gray-400'}`}>
                           {formatTime(msg.created_at)}
                         </span>
@@ -192,6 +225,24 @@ export default function ChatWindow({
       {/* Input */}
       {conversation.status !== 'closed' && (
         <div className="flex items-end gap-2 px-4 py-3 border-t border-gray-100 bg-white flex-shrink-0">
+          <AudioRecorder onAudioRecorded={handleAudioRecorded} isLoading={sending} />
+          
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="audio/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending}
+            className="w-9 h-9 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl cursor-pointer transition-colors disabled:opacity-50 flex-shrink-0"
+            title="Anexar arquivo de áudio"
+          >
+            <i className="ri-attachment-line text-sm"></i>
+          </button>
+
           <textarea
             ref={inputRef}
             value={text}
