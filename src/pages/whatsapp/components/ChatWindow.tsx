@@ -57,6 +57,7 @@ export default function ChatWindow({
   };
 
   const handleAudioRecorded = async (blob: Blob, duration: number) => {
+    console.log(`Audio recorded in ChatWindow: ${blob.size} bytes, ${duration}s`);
     await onSendAudio(blob, duration);
   };
 
@@ -193,7 +194,17 @@ export default function ChatWindow({
                               src={msg.media_url}
                               controls 
                               className="flex-1 h-10 relative z-20"
-                              preload="metadata"
+                              preload="auto"
+                              onLoadedMetadata={(e) => {
+                                const audio = e.currentTarget;
+                                if (audio.duration === Infinity) {
+                                  audio.currentTime = 1e101;
+                                  audio.ontimeupdate = function() {
+                                    this.ontimeupdate = () => {};
+                                    audio.currentTime = 0;
+                                  };
+                                }
+                              }}
                             >
                               Seu navegador não suporta o elemento de áudio.
                             </audio>
