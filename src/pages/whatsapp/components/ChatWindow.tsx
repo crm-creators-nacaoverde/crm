@@ -189,16 +189,22 @@ export default function ChatWindow({
                       {msg.message_type === 'audio' && msg.media_url ? (
                         <div className="mb-2 min-w-[260px] py-1 relative z-10" style={{ pointerEvents: 'auto' }}>
                           <audio 
+                            src={msg.media_url}
                             controls 
                             crossOrigin="anonymous"
                             className="w-full h-10 relative z-20"
                             preload="auto"
                             style={{ display: 'block' }}
-                            onError={(e) => console.error('Erro ao carregar áudio:', e)}
+                            onError={(e) => {
+                              console.error('Erro ao carregar áudio:', e);
+                              // Tentar recarregar sem crossOrigin se falhar (fallback)
+                              const target = e.currentTarget;
+                              if (target.crossOrigin) {
+                                target.removeAttribute('crossOrigin');
+                                target.load();
+                              }
+                            }}
                           >
-                            <source src={msg.media_url} type="audio/webm" />
-                            <source src={msg.media_url} type="audio/ogg" />
-                            <source src={msg.media_url} type="audio/mpeg" />
                             Seu navegador não suporta o elemento de áudio.
                           </audio>
                           {msg.body && (
