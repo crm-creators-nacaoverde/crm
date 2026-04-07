@@ -180,7 +180,7 @@ export function useWhatsApp() {
       reader.readAsDataURL(audioBlob);
       const base64Audio = await base64Promise;
 
-      const n8nUrl = 'https://n8n.metodoia.com.br/webhook-test/wa-enviar';
+      const n8nUrl = 'https://n8n.metodoia.com.br/webhook/wa-enviar';
       const response = await fetch(n8nUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
