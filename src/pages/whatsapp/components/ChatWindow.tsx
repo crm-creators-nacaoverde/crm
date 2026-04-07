@@ -188,25 +188,34 @@ export default function ChatWindow({
                       )}
                       {msg.message_type === 'audio' && msg.media_url ? (
                         <div className="mb-2 min-w-[260px] py-1 relative z-10" style={{ pointerEvents: 'auto' }}>
-                          <audio 
-                            src={msg.media_url}
-                            controls 
-                            crossOrigin="anonymous"
-                            className="w-full h-10 relative z-20"
-                            preload="auto"
-                            style={{ display: 'block' }}
-                            onError={(e) => {
-                              console.error('Erro ao carregar áudio:', e);
-                              // Tentar recarregar sem crossOrigin se falhar (fallback)
-                              const target = e.currentTarget;
-                              if (target.crossOrigin) {
-                                target.removeAttribute('crossOrigin');
-                                target.load();
-                              }
-                            }}
-                          >
-                            Seu navegador não suporta o elemento de áudio.
-                          </audio>
+                          <div className="flex items-center gap-2">
+                            <audio 
+                              src={msg.media_url}
+                              controls 
+                              className="flex-1 h-10 relative z-20"
+                              preload="metadata"
+                              onError={(e) => {
+                                console.error('Erro ao carregar áudio:', e);
+                                const target = e.currentTarget;
+                                if (target.src) {
+                                  // Tentar forçar o carregamento novamente sem crossOrigin
+                                  target.load();
+                                }
+                              }}
+                            >
+                              Seu navegador não suporta o elemento de áudio.
+                            </audio>
+                            <a 
+                              href={msg.media_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className={`p-2 rounded-lg hover:bg-black/10 transition-colors flex-shrink-0 ${isOut ? 'text-white' : 'text-emerald-600'}`}
+                              title="Baixar ou abrir áudio"
+                              download={`audio_${msg.id}.mp3`}
+                            >
+                              <i className="ri-download-2-line text-lg"></i>
+                            </a>
+                          </div>
                           {msg.body && (
                             <p className={`text-[10px] italic mt-1 px-1 opacity-90 ${isOut ? 'text-white' : 'text-gray-500'}`}>
                               {msg.body}
