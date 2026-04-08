@@ -188,42 +188,15 @@ export default function ChatWindow({
                         </p>
                       )}
                       {msg.message_type === 'audio' && msg.media_url ? (
-                        <div className="mb-2 min-w-[260px] py-1 relative z-10" style={{ pointerEvents: 'auto' }}>
-                          <div className="flex items-center gap-2">
-                            <audio 
-                              src={msg.media_url}
-                              controls 
-                              className="flex-1 h-10 relative z-20"
-                              preload="auto"
-                              onLoadedMetadata={(e) => {
-                                const audio = e.currentTarget;
-                                if (audio.duration === Infinity) {
-                                  audio.currentTime = 1e101;
-                                  audio.ontimeupdate = function() {
-                                    this.ontimeupdate = () => {};
-                                    audio.currentTime = 0;
-                                  };
-                                }
-                              }}
-                            >
-                              Seu navegador não suporta o elemento de áudio.
-                            </audio>
-                            <a 
-                              href={msg.media_url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className={`p-2 rounded-lg hover:bg-black/10 transition-colors flex-shrink-0 ${isOut ? 'text-white' : 'text-emerald-600'}`}
-                              title="Baixar ou abrir áudio"
-                              download={`audio_${msg.id}.mp3`}
-                            >
-                              <i className="ri-download-2-line text-lg"></i>
-                            </a>
-                          </div>
-                          {msg.body && (
-                            <p className={`text-[10px] italic mt-1 px-1 opacity-90 ${isOut ? 'text-white' : 'text-gray-500'}`}>
-                              {msg.body}
-                            </p>
-                          )}
+                        <div className="mb-2 min-w-[200px]">
+                          <audio
+                            src={msg.media_url}
+                            controls
+                            className="w-full h-10"
+                            preload="metadata"
+                          >
+                            Seu navegador não suporta o elemento de áudio.
+                          </audio>
                         </div>
                       ) : (
                         <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.body}</p>
