@@ -171,14 +171,7 @@ export default function ChatWindow({
                     <div className={`max-w-[72%] px-3 py-2 rounded-2xl shadow-sm ${
                       isOut ? 'bg-emerald-500 text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md'
                     }`}>
-                      {msg.message_type === 'audio' && msg.media_url ? (
-                        <div className="flex items-center gap-2 mb-1">
-                          <audio controls src={msg.media_url} className="w-full"></audio>
-                          <a href={msg.media_url} target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-700">
-                            <i className="ri-download-line text-lg"></i>
-                          </a>
-                        </div>
-                      ) : msg.message_type !== 'text' && (
+                      {msg.message_type !== 'audio' && msg.message_type !== 'text' && (
                         <div className="flex items-center gap-1.5 mb-1">
                           <i className={`text-sm ${
                             msg.message_type === 'image' ? 'ri-image-line' :
