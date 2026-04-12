@@ -15,6 +15,8 @@ import { useFunnelStages } from '../../../hooks/useFunnelStages';
 import { useFunnels } from '../../../hooks/useFunnels';
 import { useStageAutomations } from '../../../hooks/useStageAutomations';
 import StageAutomationsModal from './StageAutomationsModal';
+import StageMandatoryTaskModal from './StageMandatoryTaskModal';
+import MandatoryTaskExecutionModal from './MandatoryTaskExecutionModal';
 
 export interface Deal {
   id: string;
@@ -84,6 +86,8 @@ export default function KanbanSection() {
   const [isFunnelModalOpen, setIsFunnelModalOpen] = useState(false);
   const [isFunnelManagerOpen, setIsFunnelManagerOpen] = useState(false);
   const [automationsStage, setAutomationsStage] = useState<{ id: string; label: string; color: string } | null>(null);
+  const [mandatoryTaskStage, setMandatoryTaskStage] = useState<{ id: string; label: string; color: string; mandatory_task_title?: string; mandatory_task_description?: string } | null>(null);
+  const [pendingMandatoryTask, setPendingMandatoryTask] = useState<{ deal: Deal; stage: any } | null>(null);
   const [exportToast, setExportToast] = useState(false);
   const [hideClosedStages, setHideClosedStages] = useState(loadHideClosed);
   const [pendingDrop, setPendingDrop] = useState<{ dealId: string; stageId: string; dealTitle: string } | null>(null);
@@ -367,10 +371,19 @@ export default function KanbanSection() {
 
   const handleDrop = async (stageId: string) => {
     if (draggedDeal && draggedDeal.stage !== stageId) {
+      const targetStage = stages.find(s => s.id === stageId);
+      
+      // Verificar se a etapa de destino possui tarefa obrigatória
+      if (targetStage?.mandatory_task_title) {
+        setPendingMandatoryTask({ deal: draggedDeal, stage: targetStage });
+        setDraggedDeal(null);
+        setDragOverStage(null);
+        return;
+      }
+
       const isOutcome = stageId === 'won' || stageId === 'lost' || stageId.startsWith('won_') || stageId.startsWith('lost_');
       const outcomeType = (stageId === 'won' || stageId.startsWith('won_')) ? 'won' : 'lost';
       if (isOutcome && outcomeReasons.filter(r => r.type === outcomeType).length > 0) {
-        setPendingDrop({ dealId: draggedDeal.id, stageId, dealTitle: draggedDeal.title });
         setPendingDrop({ dealId: draggedDeal.id, stageId, dealTitle: draggedDeal.title });
         setSelectedReason('');
         setCustomReason('');
@@ -526,6 +539,7 @@ export default function KanbanSection() {
               onDeleteDeal={handleDeleteDeal}
               canDelete={canDeleteDeals}
               onOpenAutomations={(stage) => setAutomationsStage(stage)}
+              onOpenMandatoryTask={(stage) => setMandatoryTaskStage(stage)}
             />
           ))}
         </div>
@@ -573,6 +587,29 @@ export default function KanbanSection() {
         isOpen={isFunnelManagerOpen}
         onClose={() => setIsFunnelManagerOpen(false)}
       />
+
+      {mandatoryTaskStage && (
+        <StageMandatoryTaskModal
+          isOpen={!!mandatoryTaskStage}
+          onClose={() => setMandatoryTaskStage(null)}
+          stage={mandatoryTaskStage}
+          onSave={loadData}
+        />
+      )}
+
+      {pendingMandatoryTask && (
+        <MandatoryTaskExecutionModal
+          isOpen={!!pendingMandatoryTask}
+          onClose={() => setPendingMandatoryTask(null)}
+          onConfirm={() => {
+            const { deal, stage } = pendingMandatoryTask;
+            setPendingMandatoryTask(null);
+            executeDrop(stage.id, deal);
+          }}
+          deal={pendingMandatoryTask.deal}
+          stage={pendingMandatoryTask.stage}
+        />
+      )}
 
       {/* Modal de Motivo — Ganho / Perdido */}
       {pendingDrop && (

@@ -9,6 +9,8 @@ export interface FunnelStage {
   is_fixed: boolean;
   funnel_id?: string;
   description?: string;
+  mandatory_task_title?: string;
+  mandatory_task_description?: string;
 }
 
 const CACHE_KEY = 'crm_funnel_stages_cache';
@@ -110,6 +112,8 @@ export function useFunnelStages(funnelId?: string) {
           is_fixed: s.id === 'won' || s.id === 'lost' || s.id.startsWith('won_') || s.id.startsWith('lost_'),
           funnel_id: funnelId || s.funnel_id,
           description: s.description ?? null,
+          mandatory_task_title: s.mandatory_task_title ?? null,
+          mandatory_task_description: s.mandatory_task_description ?? null,
           updated_at: new Date().toISOString(),
         };
       });
@@ -135,8 +139,15 @@ export function useFunnelStages(funnelId?: string) {
     }
   }, [funnelId]);
 
-  // Formato completo incluindo description para tooltips
-  const stagesSimple = stages.map(({ id, label, color, description }) => ({ id, label, color, description }));
+  // Formato completo incluindo description para tooltips e mandatory tasks
+  const stagesSimple = stages.map(({ id, label, color, description, mandatory_task_title, mandatory_task_description }) => ({ 
+    id, 
+    label, 
+    color, 
+    description,
+    mandatory_task_title,
+    mandatory_task_description
+  }));
 
   return { stages: stagesSimple, loading, saveStages, reloadStages: loadStages };
 }

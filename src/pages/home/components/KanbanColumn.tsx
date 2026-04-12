@@ -66,6 +66,7 @@ interface KanbanColumnProps {
   onDeleteDeal: (id: string) => void;
   canDelete?: boolean;
   onOpenAutomations?: (stage: { id: string; label: string; color: string }) => void;
+  onOpenMandatoryTask?: (stage: { id: string; label: string; color: string; mandatory_task_title?: string; mandatory_task_description?: string }) => void;
 }
 
 export default function KanbanColumn({
@@ -81,6 +82,7 @@ export default function KanbanColumn({
   onDeleteDeal,
   canDelete = true,
   onOpenAutomations,
+  onOpenMandatoryTask,
 }: KanbanColumnProps) {
   return (
     <div
@@ -118,6 +120,15 @@ export default function KanbanColumn({
               className="w-6 h-6 flex items-center justify-center rounded-md text-gray-300 hover:text-[#004aad] hover:bg-[#004aad]/10 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
             >
               <i className="ri-flashlight-line text-sm"></i>
+            </button>
+          )}
+          {onOpenMandatoryTask && (
+            <button
+              onClick={() => onOpenMandatoryTask(stage)}
+              title="Tarefa obrigatória desta etapa"
+              className="w-6 h-6 flex items-center justify-center rounded-md text-gray-300 hover:text-[#004aad] hover:bg-[#004aad]/10 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+            >
+              <i className="ri-checkbox-circle-line text-sm"></i>
             </button>
           )}
         </div>
