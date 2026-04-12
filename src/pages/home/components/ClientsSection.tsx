@@ -103,7 +103,25 @@ export default function ClientsSection() {
       if (selectedClient) {
         const { error } = await supabase.from('clients').update(payload).eq('id', selectedClient.id);
         if (error) throw error;
-        await logActivity({ action: 'update', module: 'creators', entityId: selectedClient.id, entityName: selectedClient.name, details: { before: selectedClient, after: { ...selectedClient, ...payload } } });
+        
+        const changes: Record<string, { from: any; to: any }> = {};
+        for (const [key, newVal] of Object.entries(payload)) {
+          const oldVal = (selectedClient as any)[key];
+          if (String(oldVal ?? '') !== String(newVal ?? '')) {
+            changes[key] = { from: oldVal, to: newVal };
+          }
+        }
+
+        await logActivity({ 
+          action: 'update', 
+          module: 'creators', 
+          entityId: selectedClient.id, 
+          entityName: selectedClient.name, 
+          details: { 
+            message: `Campos alterados: ${Object.keys(changes).join(', ')}`,
+            changes 
+          } 
+        });
         showToast('Creator atualizado com sucesso!');
       } else {
         const { data: newClient, error } = await supabase.from('clients').insert([{ ...payload, created_by: user?.id }]).select().single();

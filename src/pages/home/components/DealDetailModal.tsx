@@ -428,23 +428,34 @@ export default function DealDetailModal({
       if (error) throw error;
 
       if (editSection === 'contato') {
-        const campos = ['Telefone', 'E-mail', 'CPF/CNPJ'].filter((_, i) => {
-          const keys = ['phone', 'email', 'cpf_cnpj'];
-          return String(editData[keys[i] as keyof ClientFull] ?? '') !== String(client[keys[i] as keyof ClientFull] ?? '');
-        });
-        if (campos.length > 0) {
-          await logClientEvent({ client_id: client.id, ...historyEvent.edicaoDados(campos) });
+        const keys = ['phone', 'email', 'cpf_cnpj'];
+        const labels = ['Telefone', 'E-mail', 'CPF/CNPJ'];
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i] as keyof ClientFull;
+          const oldVal = client[k];
+          const newVal = editData[k];
+          if (String(newVal ?? '') !== String(oldVal ?? '')) {
+            await logClientEvent({ 
+              client_id: client.id, 
+              ...historyEvent.dadosAlterados(labels[i], oldVal, newVal) 
+            });
+          }
         }
       }
 
       if (editSection === 'endereco') {
         const endKeys = ['endereco_cep','endereco_rua','endereco_numero','endereco_complemento','endereco_bairro','endereco_cidade','endereco_estado'];
         const endLabels = ['CEP','Rua','Número','Complemento','Bairro','Cidade','Estado'];
-        const campos = endLabels.filter((_, i) =>
-          String(editData[endKeys[i] as keyof ClientFull] ?? '') !== String(client[endKeys[i] as keyof ClientFull] ?? '')
-        );
-        if (campos.length > 0) {
-          await logClientEvent({ client_id: client.id, ...historyEvent.edicaoDados(campos) });
+        for (let i = 0; i < endKeys.length; i++) {
+          const k = endKeys[i] as keyof ClientFull;
+          const oldVal = client[k];
+          const newVal = editData[k];
+          if (String(newVal ?? '') !== String(oldVal ?? '')) {
+            await logClientEvent({ 
+              client_id: client.id, 
+              ...historyEvent.dadosAlterados(endLabels[i], oldVal, newVal) 
+            });
+          }
         }
       }
 
@@ -467,10 +478,18 @@ export default function DealDetailModal({
             ...historyEvent.amostraEnviada(editData.codigo_rastreio as string || undefined),
           });
         } else if (rastreioMudou || editData.amostra_observacao !== client.amostra_observacao) {
-          await logClientEvent({
-            client_id: client.id,
-            ...historyEvent.amostraAtualizada(editData.amostra_observacao as string || undefined),
-          });
+          if (rastreioMudou) {
+            await logClientEvent({
+              client_id: client.id,
+              ...historyEvent.dadosAlterados('Código de Rastreio', client.codigo_rastreio, editData.codigo_rastreio)
+            });
+          }
+          if (editData.amostra_observacao !== client.amostra_observacao) {
+            await logClientEvent({
+              client_id: client.id,
+              ...historyEvent.dadosAlterados('Observação da Amostra', client.amostra_observacao, editData.amostra_observacao)
+            });
+          }
         }
       }
 
@@ -481,14 +500,15 @@ export default function DealDetailModal({
           videos_7d: 'Vídeos 7d', videos_14d: 'Vídeos 14d', videos_28d: 'Vídeos 28d', videos_30d: 'Vídeos 30d',
           lives_7d: 'Lives 7d', lives_14d: 'Lives 14d', lives_28d: 'Lives 28d', lives_30d: 'Lives 30d',
         };
-        const changed: Record<string, unknown> = {};
         for (const [key, label] of Object.entries(metricasKeys)) {
           const newVal = editData[key as keyof ClientFull];
           const oldVal = client[key as keyof ClientFull];
-          if (String(newVal ?? '') !== String(oldVal ?? '')) changed[label] = newVal;
-        }
-        if (Object.keys(changed).length > 0) {
-          await logClientEvent({ client_id: client.id, ...historyEvent.resultadoAtualizado(changed) });
+          if (String(newVal ?? '') !== String(oldVal ?? '')) {
+            await logClientEvent({ 
+              client_id: client.id, 
+              ...historyEvent.dadosAlterados(label, oldVal, newVal) 
+            });
+          }
         }
       }
 

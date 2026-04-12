@@ -309,31 +309,47 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
           endereco_cep: 'CEP',
           endereco_rua: 'Rua',
           endereco_numero: 'Número',
+          endereco_complemento: 'Complemento',
           endereco_bairro: 'Bairro',
           endereco_cidade: 'Cidade',
           endereco_estado: 'Estado',
           chave_pix: 'Chave PIX',
           chave_pix_tipo: 'Tipo PIX',
           codigo_rastreio: 'Código de Rastreio',
+          amostra_enviada: 'Amostra Enviada',
+          amostra_observacao: 'Observação da Amostra',
+          gmv_geral: 'GMV Geral',
+          produtos_divulgados: 'Produtos Divulgados',
+          comissao_organica: 'Comissão Orgânica',
+          comissao_trafego: 'Comissão Tráfego',
+          whatsapp_group_link: 'Link do Grupo WhatsApp',
         };
 
-        const changedFields: string[] = [];
+        const changes: Record<string, { from: any; to: any }> = {};
         for (const [key, newValue] of Object.entries(payload)) {
           const oldValue = (client as any)[key];
           
-          // Comparação simples para strings, números e booleanos
-          // Ignorar campos que não queremos logar detalhadamente ou que são objetos complexos
-          if (fieldLabels[key] && String(oldValue || '') !== String(newValue || '')) {
+          if (fieldLabels[key] && String(oldValue ?? '') !== String(newValue ?? '')) {
+            const event = historyEvent.dadosAlterados(fieldLabels[key], oldValue, newValue);
             await logClientEvent({
               client_id: client.id,
-              ...historyEvent.dadosAlterados(fieldLabels[key], String(oldValue || ''), String(newValue || ''))
+              ...event
             });
-            changedFields.push(fieldLabels[key]);
+            changes[fieldLabels[key]] = { from: event.metadata.from, to: event.metadata.to };
           }
         }
 
         sendNotification('Creator Atualizado', { body: `${form.name} foi atualizado com sucesso.` });
-        await logActivity({ action: 'update', module: 'creators', entityId: client.id, entityName: form.name, details: { fields: changedFields } });
+        await logActivity({ 
+          action: 'update', 
+          module: 'creators', 
+          entityId: client.id, 
+          entityName: form.name, 
+          details: { 
+            message: `Campos alterados: ${Object.keys(changes).join(', ')}`,
+            changes 
+          } 
+        });
       } else {
         const { error, data: newData } = await supabase.from('clients').insert([payload]).select('id').single();
         if (error) throw error;

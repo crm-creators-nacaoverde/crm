@@ -322,6 +322,9 @@ export default function KanbanSection() {
         const oldStage = stages.find(s => s.id === draggedDeal.stage);
         const newStage = stages.find(s => s.id === stageId);
         
+        const fromStage = oldStage?.label || draggedDeal.stage;
+        const toStage = newStage?.label || stageId;
+        
         await logActivity({
           action: 'update',
           module: 'deals',
@@ -329,8 +332,9 @@ export default function KanbanSection() {
           entityName: draggedDeal.title,
           details: { 
             action: 'move_stage',
-            from: oldStage?.label || draggedDeal.stage,
-            to: newStage?.label || stageId
+            from: fromStage,
+            to: toStage,
+            message: `Etapa alterada de "${fromStage}" para "${toStage}"`
           }
         });
         

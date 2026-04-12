@@ -95,9 +95,25 @@ export default function ClientHistoryTimeline({ clientId }: Props) {
                 </div>
 
                 {entry.description && (
-                  <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-                    {entry.description}
-                  </p>
+                  <div className="mt-1">
+                    {entry.description.includes('De: "') && entry.description.includes('" para: "') ? (
+                      <div className="inline-flex flex-wrap items-center gap-x-1.5 text-xs bg-gray-50 border border-gray-100 px-2 py-1 rounded-md">
+                        <span className="text-gray-400">De:</span>
+                        <span className="font-medium text-rose-500 line-through decoration-rose-300/50">
+                          {entry.description.split('De: "')[1].split('" para: "')[0]}
+                        </span>
+                        <i className="ri-arrow-right-line text-gray-300 text-[10px]" />
+                        <span className="text-gray-400">Para:</span>
+                        <span className="font-semibold text-emerald-600">
+                          {entry.description.split('" para: "')[1].slice(0, -1)}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 leading-relaxed">
+                        {entry.description}
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
