@@ -11,6 +11,9 @@ import DistributionCharts from './components/DistributionCharts';
 import TopCreatorsAndInteractions from './components/TopCreatorsAndInteractions';
 import MonthlyEvolution from './components/MonthlyEvolution';
 import GoalCard from './components/GoalCard';
+import MissionCard from './components/MissionCard';
+import EliteRanking from './components/EliteRanking';
+import PerformanceTable from './components/PerformanceTable';
 import GoalFormModal from './components/GoalFormModal';
 import RankingTable from './components/RankingTable';
 import LogisticsWidget from './widgets/LogisticsWidget';
@@ -1032,75 +1035,46 @@ export default function MetricasPage() {
                         </button>
                       </div>
                     )
-                    : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{progresses.map(p => (<GoalCard key={p.goal.id} progress={p} isAdmin onEdit={() => { setEditingGoal(p.goal); setShowGoalModal(true); }} onDelete={() => setDeleteGoalConfirm(p.goal)} onToggle={() => handleToggleGoal(p.goal)} />))}</div>
+                    : <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{progresses.map(p => (<MissionCard key={p.goal.id} progress={p} isAdmin onEdit={() => { setEditingGoal(p.goal); setShowGoalModal(true); }} onDelete={() => setDeleteGoalConfirm(p.goal)} onToggle={() => handleToggleGoal(p.goal)} />))}</div>
                 )}
 
                 {/* Gestão */}
                 {goalTab === 'gestao' && (
-                  <div className="space-y-4">
-                    <div className="bg-white rounded-xl border border-gray-100 p-4">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                        <div className="flex items-center gap-2 flex-1 flex-wrap">
-                          <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-                            {['all','active','inactive'].map(s => (<button key={s} onClick={() => setFilterGoalStatus(s)} className={`px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-all whitespace-nowrap ${filterGoalStatus === s ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>{s === 'all' ? 'Todas' : s === 'active' ? 'Ativas' : 'Pausadas'}</button>))}
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center bg-gray-100 rounded-xl p-1">
+                            {['all','active','inactive'].map(s => (<button key={s} onClick={() => setFilterGoalStatus(s)} className={`px-4 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all whitespace-nowrap ${filterGoalStatus === s ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>{s === 'all' ? 'TODAS' : s === 'active' ? 'ATIVAS' : 'PAUSADAS'}</button>))}
                           </div>
-                          <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-                            <button onClick={() => setFilterGoalCat('all')} className={`px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-all ${filterGoalCat === 'all' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>Todas</button>
-                            {Object.entries(GOAL_CATEGORY_LABELS).map(([k, v]) => (<button key={k} onClick={() => setFilterGoalCat(k)} className={`px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-all whitespace-nowrap ${filterGoalCat === k ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>{v}</button>))}
+                          <div className="flex items-center bg-gray-100 rounded-xl p-1">
+                            <button onClick={() => setFilterGoalCat('all')} className={`px-4 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all ${filterGoalCat === 'all' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>TODAS</button>
+                            {Object.entries(GOAL_CATEGORY_LABELS).map(([k, v]) => (<button key={k} onClick={() => setFilterGoalCat(k)} className={`px-4 py-2 text-xs font-bold rounded-lg cursor-pointer transition-all whitespace-nowrap ${filterGoalCat === k ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}>{v.toUpperCase()}</button>))}
                           </div>
                         </div>
-                        <button onClick={() => { setEditingGoal(null); setShowGoalModal(true); }} className="flex items-center gap-2 px-4 py-2 bg-[#004aad] text-white text-sm font-medium rounded-xl cursor-pointer whitespace-nowrap">
-                          <i className="ri-add-line"></i>Nova Meta
+                        <button onClick={() => { setEditingGoal(null); setShowGoalModal(true); }} className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white text-sm font-black rounded-2xl cursor-pointer whitespace-nowrap hover:bg-black transition-all shadow-lg shadow-gray-200">
+                          <i className="ri-add-line"></i>NOVA MISSÃO
                         </button>
                       </div>
                     </div>
-                    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-                      <table className="w-full">
-                        <thead><tr className="border-b border-gray-100">
-                          <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Meta</th>
-                          <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Tipo</th>
-                          <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Período</th>
-                          <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Alvo</th>
-                          <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Progresso</th>
-                          <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-                          <th className="px-5 py-3.5 text-right text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
-                        </tr></thead>
-                        <tbody>
-                          {filteredGoals.length === 0
-                            ? <tr><td colSpan={7} className="px-5 py-16 text-center"><p className="text-sm text-gray-400">Nenhuma meta encontrada</p></td></tr>
-                            : filteredGoals.map(g => {
-                              const p = progresses.find(pr => pr.goal.id === g.id);
-                              const pct = p?.percent ?? 0;
-                              return (
-                                <tr key={g.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors group">
-                                  <td className="px-5 py-3.5"><div><p className="text-sm font-medium text-gray-900">{g.title}</p><p className="text-xs text-gray-400">{GOAL_CATEGORY_LABELS[g.category]}{g.assigned_name ? ` → ${g.assigned_name}` : ' (Global)'}</p></div></td>
-                                  <td className="px-5 py-3.5 text-xs text-gray-600">{GOAL_TYPE_LABELS[g.type]}</td>
-                                  <td className="px-5 py-3.5 text-xs text-gray-600">{PERIOD_LABELS[g.period_type]}</td>
-                                  <td className="px-5 py-3.5 text-sm font-semibold text-gray-800">{g.target_value.toLocaleString('pt-BR')}</td>
-                                  <td className="px-5 py-3.5"><div className="flex items-center gap-2"><div className="w-20 bg-gray-100 rounded-full h-1.5"><div className={`h-1.5 rounded-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-[#004aad]'}`} style={{ width: `${pct}%` }} /></div><span className="text-xs font-medium text-gray-700">{pct}%</span></div></td>
-                                  <td className="px-5 py-3.5">{g.is_active ? <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>Ativa</span> : <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400"><span className="w-1.5 h-1.5 bg-gray-300 rounded-full"></span>Pausada</span>}</td>
-                                  <td className="px-5 py-3.5"><div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => handleToggleGoal(g)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg cursor-pointer"><i className={`${g.is_active ? 'ri-pause-line' : 'ri-play-line'} text-sm`}></i></button>
-                                    <button onClick={() => { setEditingGoal(g); setShowGoalModal(true); }} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg cursor-pointer"><i className="ri-edit-line text-sm"></i></button>
-                                    <button onClick={() => setDeleteGoalConfirm(g)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"><i className="ri-delete-bin-line text-sm"></i></button>
-                                  </div></td>
-                                </tr>
-                              );
-                            })
-                          }
-                        </tbody>
-                      </table>
-                    </div>
+                    
+                    <PerformanceTable 
+                      progresses={filteredGoals.map(g => progresses.find(p => p.goal.id === g.id) || { goal: g, current_value: 0, percent: 0, achieved: false, days_remaining: null })}
+                      isAdmin
+                      onEdit={(g) => { setEditingGoal(g); setShowGoalModal(true); }}
+                      onDelete={(id) => setDeleteGoalConfirm(filteredGoals.find(g => g.id === id))}
+                      onToggle={(g) => handleToggleGoal(g)}
+                    />
                   </div>
                 )}
 
                 {/* Ranking admin */}
                 {goalTab === 'ranking' && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {RANKING_PERIODS.map((p, i) => (<button key={i} onClick={() => setRankingPeriodIdx(i)} className={`px-3 py-1.5 text-xs font-medium rounded-lg border cursor-pointer transition-all ${rankingPeriodIdx === i ? 'border-[#004aad] bg-[#004aad]/5 text-[#004aad]' : 'border-gray-200 text-gray-500'}`}>{p.label}</button>))}
+                  <div className="space-y-8">
+                    <div className="flex items-center gap-2 flex-wrap bg-white p-2 rounded-2xl border border-gray-100 w-fit">
+                      {RANKING_PERIODS.map((p, i) => (<button key={i} onClick={() => setRankingPeriodIdx(i)} className={`px-4 py-2 text-xs font-bold rounded-xl cursor-pointer transition-all ${rankingPeriodIdx === i ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>{p.label.toUpperCase()}</button>))}
                     </div>
-                    <RankingTable entries={rankingEntries} currentUserId={profile?.id} loading={loadingRanking} />
+                    <EliteRanking entries={rankingEntries} currentUserId={profile?.id} loading={loadingRanking} />
                   </div>
                 )}
               </>
@@ -1129,7 +1103,7 @@ export default function MetricasPage() {
                           <div className="bg-white rounded-xl border border-gray-100 p-4 text-center"><p className="text-2xl font-bold text-emerald-600">{myProgresses.filter(p => p.achieved).length}</p><p className="text-xs text-gray-400 mt-0.5">Atingidas</p></div>
                           <div className="bg-white rounded-xl border border-gray-100 p-4 text-center"><p className="text-2xl font-bold text-[#004aad]">{myProgresses.length ? Math.round(myProgresses.reduce((s, p) => s + p.percent, 0) / myProgresses.length) : 0}%</p><p className="text-xs text-gray-400 mt-0.5">Média</p></div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">{myProgresses.map(p => (<GoalCard key={p.goal.id} progress={p} isAdmin={false} />))}</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{myProgresses.map(p => (<MissionCard key={p.goal.id} progress={p} isAdmin={false} />))}</div>
                       </>
                     )
                 )}
@@ -1139,7 +1113,7 @@ export default function MetricasPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       {RANKING_PERIODS.map((p, i) => (<button key={i} onClick={() => setRankingPeriodIdx(i)} className={`px-3 py-1.5 text-xs font-medium rounded-lg border cursor-pointer transition-all ${rankingPeriodIdx === i ? 'border-[#004aad] bg-[#004aad]/5 text-[#004aad]' : 'border-gray-200 text-gray-500'}`}>{p.label}</button>))}
                     </div>
-                    <RankingTable entries={rankingEntries} currentUserId={profile?.id} loading={loadingRanking} />
+                    <EliteRanking entries={rankingEntries} currentUserId={profile?.id} loading={loadingRanking} />
                   </div>
                 )}
 
