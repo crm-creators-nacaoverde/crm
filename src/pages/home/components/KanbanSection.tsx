@@ -613,15 +613,24 @@ export default function KanbanSection() {
                   </label>
                 </div>
 
-                {/* Campo de justificativa manual (sempre visível ou condicional ao "Outro") */}
+                {/* Campo de justificativa manual - OBRIGATÓRIO */}
                 <div className="mt-4 space-y-2">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Justificativa Adicional</p>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                    <span>Justificativa Obrigatória</span>
+                    <span className="text-rose-500">*</span>
+                  </p>
                   <textarea
                     value={customReason}
                     onChange={e => setCustomReason(e.target.value)}
-                    placeholder={selectedReason === '__outro' ? "Descreva o motivo detalhadamente..." : "Observações adicionais (opcional)..."}
+                    placeholder="Descreva detalhadamente o motivo da perda/ganho..."
                     className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] min-h-[80px] resize-none"
                   />
+                  {!customReason.trim() && selectedReason && (
+                    <p className="text-xs text-rose-500 flex items-center gap-1">
+                      <i className="ri-error-warning-line"></i>
+                      Campo obrigatório
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -631,16 +640,15 @@ export default function KanbanSection() {
                 Cancelar
               </button>
               <button
-                disabled={!selectedReason || (selectedReason === '__outro' && !customReason.trim())}
+                disabled={!selectedReason || !customReason.trim()}
                 onClick={async () => {
                   const baseReason = outcomeReasons.find(r => r.id === selectedReason)?.name || (selectedReason === '__outro' ? 'Outro' : '');
                   const additionalJustification = customReason.trim();
                   
-                  // Se for "Outro", a justificativa manual é obrigatória e se torna o motivo principal
-                  // Caso contrário, concatenamos se houver justificativa
+                  // A justificativa manual é sempre obrigatória e concatenada com o motivo selecionado
                   const finalReason = selectedReason === '__outro' 
                     ? additionalJustification 
-                    : (additionalJustification ? `${baseReason} - ${additionalJustification}` : baseReason);
+                    : `${baseReason} - ${additionalJustification}`;
 
                   const isLost = !(pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_'));
                   
