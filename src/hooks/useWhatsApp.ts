@@ -346,7 +346,6 @@ export function useWhatsApp() {
       });
     }
 
-    const conv = conversations.find(c => c.id === convId);
     if (conv?.client_id && funnelId && stageId) {
       await supabase.from('deals').insert({
         title: `${conv.client_name} — WhatsApp`,
