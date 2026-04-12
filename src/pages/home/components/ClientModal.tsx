@@ -4,6 +4,7 @@ import Button from '../../../components/base/Button';
 import { Client, supabase } from '../../../lib/supabase';
 import { useNotificationContext } from '../../../contexts/NotificationContext';
 import { useActivityLog } from '../../../hooks/useActivityLog';
+import { useClientHistory, historyEvent } from '../../../hooks/useClientHistory';
 
 interface ClientModalProps {
   isOpen: boolean;
@@ -54,6 +55,7 @@ const validateCpfCnpj = (value: string): boolean => {
 export default function ClientModal({ isOpen, onClose, client, onSave }: ClientModalProps) {
   const { sendNotification } = useNotificationContext();
   const { logActivity } = useActivityLog();
+  const { logClientEvent } = useClientHistory();
   const [categorias, setCategorias] = useState<string[]>(CATEGORIAS_DEFAULT);
   const [plataformas, setPlataformas] = useState<{ name: string; icon: string; color: string }[]>([]);
   const [fontes, setFontes] = useState<string[]>([]);
@@ -289,8 +291,46 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
       if (client) {
         const { error } = await supabase.from('clients').update(payload).eq('id', client.id);
         if (error) throw error;
+
+        // Registrar alterações no histórico
+        const fieldLabels: Record<string, string> = {
+          name: 'Nome',
+          phone: 'Telefone',
+          cpf_cnpj: 'CPF/CNPJ',
+          platform: 'Plataforma',
+          category: 'Categoria',
+          capture_source: 'Fonte de Captura',
+          instagram_profile: 'Instagram',
+          youtube_canal: 'YouTube',
+          status: 'Status',
+          endereco_cep: 'CEP',
+          endereco_rua: 'Rua',
+          endereco_numero: 'Número',
+          endereco_bairro: 'Bairro',
+          endereco_cidade: 'Cidade',
+          endereco_estado: 'Estado',
+          chave_pix: 'Chave PIX',
+          chave_pix_tipo: 'Tipo PIX',
+          codigo_rastreio: 'Código de Rastreio',
+        };
+
+        const changedFields: string[] = [];
+        for (const [key, newValue] of Object.entries(payload)) {
+          const oldValue = (client as any)[key];
+          
+          // Comparação simples para strings, números e booleanos
+          // Ignorar campos que não queremos logar detalhadamente ou que são objetos complexos
+          if (fieldLabels[key] && String(oldValue || '') !== String(newValue || '')) {
+            await logClientEvent({
+              client_id: client.id,
+              ...historyEvent.dadosAlterados(fieldLabels[key], String(oldValue || ''), String(newValue || ''))
+            });
+            changedFields.push(fieldLabels[key]);
+          }
+        }
+
         sendNotification('Creator Atualizado', { body: `${form.name} foi atualizado com sucesso.` });
-        await logActivity({ action: 'update', module: 'creators', entityId: client.id, entityName: form.name, details: { fields: Object.keys(payload) } });
+        await logActivity({ action: 'update', module: 'creators', entityId: client.id, entityName: form.name, details: { fields: changedFields } });
       } else {
         const { error, data: newData } = await supabase.from('clients').insert([payload]).select('id').single();
         if (error) throw error;

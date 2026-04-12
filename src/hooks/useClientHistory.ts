@@ -98,6 +98,13 @@ export const historyEvent = {
     description: `Campos alterados: ${fields.join(', ')}`,
   }),
 
+  dadosAlterados: (campo: string, de: string, para: string) => ({
+    event_type: 'edicao_dados' as const,
+    title: `Alteração: ${campo}`,
+    description: `De: "${de || 'vazio'}" para: "${para || 'vazio'}"`,
+    metadata: { field: campo, from: de, to: para },
+  }),
+
   movimentacao: (from: string, to: string, dealTitle?: string) => ({
     event_type: 'movimentacao' as const,
     title: `Movido para "${to}"`,
