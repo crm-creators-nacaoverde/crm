@@ -56,8 +56,10 @@ export default function GoalCard({ progress, onEdit, onDelete, onToggle, isAdmin
             <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${colors.bg} ${colors.text} border ${colors.border}`}>
               {GOAL_CATEGORY_LABELS[goal.category]}
             </span>
-            {goal.scope === 'individual' && goal.assigned_name && (
-              <span className="text-[10px] text-gray-400 truncate">→ {goal.assigned_name}</span>
+            {goal.scope === 'individual' && goal.assigned_name && goal.assigned_name.length > 0 && (
+              <span className="text-[10px] text-gray-400 truncate" title={goal.assigned_name.join(', ')}>
+                → {goal.assigned_name.length === 1 ? goal.assigned_name[0] : `${goal.assigned_name.length} usuários (Time)`}
+              </span>
             )}
           </div>
           <h3 className="text-sm font-semibold text-gray-900 truncate">{goal.title}</h3>
@@ -120,7 +122,14 @@ export default function GoalCard({ progress, onEdit, onDelete, onToggle, isAdmin
           </div>
         </div>
 
-        {/* Filtros aplicados */}
+        {/* Prêmio e Filtros aplicados */}
+        {goal.reward_description && (
+          <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-100 rounded-xl text-amber-700">
+            <i className="ri-medal-2-line text-sm"></i>
+            <p className="text-[10px] font-bold leading-tight">{goal.reward_description}</p>
+          </div>
+        )}
+
         {(goal.filter_channel || goal.filter_category || goal.filter_source) && (
           <div className="flex flex-wrap gap-1.5 pt-1 border-t border-gray-50">
             {goal.filter_channel && (

@@ -23,8 +23,8 @@ const EMPTY: Omit<Goal, 'id' | 'created_at' | 'updated_at'> = {
   title: '', description: null, category: 'hunter', type: 'leads_prospectados',
   target_value: 0, period_type: 'monthly', period_month: new Date().getMonth() + 1,
   period_year: new Date().getFullYear(), period_start: null, period_end: null,
-  scope: 'global', assigned_to: null, assigned_name: null, funnel_id: null,
-  filter_channel: null, filter_category: null, filter_source: null,
+  scope: 'global', assigned_to: [], assigned_name: [], reward_description: null,
+  funnel_id: null, filter_channel: null, filter_category: null, filter_source: null,
   notify_at_percent: 80, is_active: true, created_by: null,
 };
 
@@ -137,27 +137,71 @@ export default function GoalFormModal({ goal, onClose, onSave }: Props) {
                 onChange={e => set('target_value', parseFloat(e.target.value) || 0)}
                 placeholder="Ex: 50" className={inp} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={lbl}>Escopo</label>
-                <select value={form.scope} onChange={e => { set('scope', e.target.value); if (e.target.value === 'global') { set('assigned_to', null); set('assigned_name', null); }}} className={`${inp} cursor-pointer`}>
-                  <option value="global">Global (toda equipe)</option>
-                  <option value="individual">Individual (por usuário)</option>
-                </select>
-              </div>
-              {form.scope === 'individual' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className={lbl}>Usuário</label>
-                  <select value={form.assigned_to || ''} onChange={e => {
-                    const u = users.find(u => u.id === e.target.value);
-                    set('assigned_to', u?.id || null); set('assigned_name', u?.full_name || null);
+                  <label className={lbl}>Escopo</label>
+                  <select value={form.scope} onChange={e => { 
+                    set('scope', e.target.value); 
+                    if (e.target.value === 'global') { 
+                      set('assigned_to', []); 
+                      set('assigned_name', []); 
+                    }
                   }} className={`${inp} cursor-pointer`}>
-                    <option value="">Selecione...</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                    <option value="global">Global (toda equipe)</option>
+                    <option value="individual">Time / Usuários</option>
                   </select>
                 </div>
-              )}
-            </div>
+                {form.scope === 'individual' && (
+                  <div>
+                    <label className={lbl}>Usuários (Time)</label>
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-1.5 p-2 border border-gray-200 rounded-lg bg-gray-50 min-h-[42px]">
+                        {(form.assigned_to || []).length === 0 && <span className="text-gray-400 text-xs p-1">Nenhum selecionado</span>}
+                        {(form.assigned_to || []).map(uid => {
+                          const u = users.find(user => user.id === uid);
+                          return (
+                            <span key={uid} className="flex items-center gap-1 px-2 py-1 bg-brand-500 text-white text-[10px] font-bold rounded-md">
+                              {u?.full_name || 'Usuário'}
+                              <button type="button" onClick={() => {
+                                const newIds = (form.assigned_to || []).filter(id => id !== uid);
+                                const newNames = (form.assigned_name || []).filter(n => n !== u?.full_name);
+                                set('assigned_to', newIds);
+                                set('assigned_name', newNames);
+                              }} className="hover:text-white/80"><i className="ri-close-line"></i></button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <select 
+                        value="" 
+                        onChange={e => {
+                          if (!e.target.value) return;
+                          const u = users.find(u => u.id === e.target.value);
+                          if (u && !(form.assigned_to || []).includes(u.id)) {
+                            set('assigned_to', [...(form.assigned_to || []), u.id]);
+                            set('assigned_name', [...(form.assigned_name || []), u.full_name]);
+                          }
+                        }} 
+                        className={`${inp} cursor-pointer`}
+                      >
+                        <option value="">Adicionar usuário...</option>
+                        {users.filter(u => !(form.assigned_to || []).includes(u.id)).map(u => (
+                          <option key={u.id} value={u.id}>{u.full_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className={lbl}>Prêmio ao atingir meta (Opcional)</label>
+                <input 
+                  value={form.reward_description || ''} 
+                  onChange={e => set('reward_description', e.target.value || null)}
+                  placeholder="Ex: Bônus extra por atingir meta de GMV" 
+                  className={inp} 
+                />
+              </div>
             <div>
               <label className={lbl}>Notificar ao atingir (%)</label>
               <div className="flex items-center gap-3">

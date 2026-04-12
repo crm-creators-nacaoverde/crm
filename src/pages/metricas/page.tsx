@@ -173,7 +173,7 @@ function GoalProgressWidget() {
         g.is_active && (
           canSeeAll ||
           g.scope === 'global' ||
-          (g.scope === 'individual' && g.assigned_to === profile?.id)
+          (g.scope === 'individual' && (g.assigned_to || []).includes(profile?.id || ''))
         )
       );
       const results = await Promise.all(relevant.map(g => buildProgress(g, profile?.id)));
@@ -840,7 +840,7 @@ export default function MetricasPage() {
     const matchStatus = filterGoalStatus === 'all' || (filterGoalStatus === 'active' ? g.is_active : !g.is_active);
     return matchCat && matchStatus;
   });
-  const myProgresses = progresses.filter(p => p.goal.scope === 'global' || (p.goal.scope === 'individual' && p.goal.assigned_to === profile?.id));
+  const myProgresses = progresses.filter(p => p.goal.scope === 'global' || (p.goal.scope === 'individual' && (p.goal.assigned_to || []).includes(profile?.id || '')));
   const avgPercent   = progresses.length ? Math.round(progresses.reduce((s, p) => s + p.percent, 0) / progresses.length) : 0;
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 

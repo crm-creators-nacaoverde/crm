@@ -74,6 +74,12 @@ export default function MissionCard({ progress, onEdit, onDelete, onToggle, isAd
         </div>
         <h3 className="text-sm font-bold text-gray-900 truncate group-hover:text-gray-700 transition-colors">{goal.title}</h3>
         <p className="text-[11px] text-gray-500 mt-0.5">{GOAL_TYPE_LABELS[goal.type]}</p>
+        {goal.reward_description && (
+          <div className="mt-2 flex items-center gap-1.5 p-1.5 bg-yellow-400/10 border border-yellow-400/20 rounded-lg text-yellow-700">
+            <Trophy size={12} className="text-yellow-500 fill-yellow-500" />
+            <p className="text-[9px] font-black uppercase tracking-wider leading-tight">{goal.reward_description}</p>
+          </div>
+        )}
       </div>
 
       {/* Body */}

@@ -29,8 +29,9 @@ export interface Goal {
   period_start: string | null;
   period_end: string | null;
   scope: 'global' | 'individual';
-  assigned_to: string | null;
-  assigned_name: string | null;
+  assigned_to: string[] | null;
+  assigned_name: string[] | null;
+  reward_description: string | null;
   funnel_id: string | null;
   filter_channel: string | null;
   filter_category: string | null;
@@ -223,7 +224,10 @@ export function useGoals() {
         case 'cadastros_mornos': {
           let q = supabase.from('clients').select('id', { count: 'exact', head: true })
             .gte('created_at', startIso).lte('created_at', endIso);
-          if (goal.scope === 'individual' && uid) q = q.eq('created_by', uid);
+          if (goal.scope === 'individual') {
+            const uids = goal.assigned_to || (uid ? [uid] : []);
+            if (uids.length > 0) q = q.in('created_by', uids);
+          }
           if (goal.filter_channel)  q = q.eq('platform', goal.filter_channel);
           if (goal.filter_category) q = q.eq('category', goal.filter_category);
           if (goal.type === 'leads_prospectados' && goal.filter_source)
@@ -246,7 +250,10 @@ export function useGoals() {
           let q = supabase.from('interactions').select('id', { count: 'exact', head: true })
             .eq('type', typeMap[goal.type])
             .gte('created_at', startIso).lte('created_at', endIso);
-          if (goal.scope === 'individual' && uid) q = q.eq('created_by', uid);
+          if (goal.scope === 'individual') {
+            const uids = goal.assigned_to || (uid ? [uid] : []);
+            if (uids.length > 0) q = q.in('created_by', uids);
+          }
           const { count } = await q;
           return count || 0;
         }
@@ -257,7 +264,10 @@ export function useGoals() {
           let q = supabase.from('clients').select('id', { count: 'exact', head: true })
             .not('whatsapp_group_link', 'is', null)
             .gte('created_at', startIso).lte('created_at', endIso);
-          if (goal.scope === 'individual' && uid) q = q.eq('created_by', uid);
+          if (goal.scope === 'individual') {
+            const uids = goal.assigned_to || (uid ? [uid] : []);
+            if (uids.length > 0) q = q.in('created_by', uids);
+          }
           const { count } = await q;
           return count || 0;
         }
@@ -274,7 +284,10 @@ export function useGoals() {
           const field = gmvField[goal.type];
           // Busca clients via deals.assigned_to
           let dealsQ = supabase.from('deals').select('client_id');
-          if (goal.scope === 'individual' && uid) dealsQ = dealsQ.eq('assigned_to', uid);
+          if (goal.scope === 'individual') {
+            const uids = goal.assigned_to || (uid ? [uid] : []);
+            if (uids.length > 0) dealsQ = dealsQ.in('assigned_to', uids);
+          }
           const { data: dealRows } = await dealsQ;
           const clientIds = (dealRows || []).map(d => d.client_id).filter(Boolean);
           if (clientIds.length === 0) return 0;
