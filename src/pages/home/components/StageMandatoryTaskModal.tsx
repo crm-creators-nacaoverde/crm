@@ -11,9 +11,39 @@ interface Props {
     color: string;
     mandatory_task_title?: string;
     mandatory_task_description?: string;
+    mandatory_task_type?: 'manual' | 'field' | 'task_standard';
+    mandatory_task_target_id?: string;
+    mandatory_task_rule?: 'filled' | 'created' | 'completed';
   };
   onSave: () => void;
 }
+
+const SYSTEM_FIELDS = [
+  { id: 'client_name', label: 'Nome do Creator' },
+  { id: 'client_email', label: 'E-mail do Creator' },
+  { id: 'client_phone', label: 'Telefone do Creator' },
+  { id: 'client_cpf_cnpj', label: 'CPF/CNPJ' },
+  { id: 'client_endereco_cep', label: 'CEP' },
+  { id: 'client_endereco_rua', label: 'Rua' },
+  { id: 'client_endereco_numero', label: 'Número' },
+  { id: 'client_endereco_bairro', label: 'Bairro' },
+  { id: 'client_endereco_cidade', label: 'Cidade' },
+  { id: 'client_endereco_estado', label: 'Estado' },
+  { id: 'client_chave_pix', label: 'Chave PIX' },
+  { id: 'client_chave_pix_tipo', label: 'Tipo de Chave PIX' },
+  { id: 'client_codigo_rastreio', label: 'Código de Rastreio' },
+  { id: 'deal_value', label: 'Valor da Negociação' },
+  { id: 'deal_expected_close_date', label: 'Previsão de Fechamento' },
+];
+
+const TASK_TYPES = [
+  { id: 'task', label: 'Tarefa' },
+  { id: 'call', label: 'Ligação' },
+  { id: 'whatsapp', label: 'WhatsApp' },
+  { id: 'meeting', label: 'Reunião' },
+  { id: 'email', label: 'E-mail' },
+  { id: 'followup', label: 'Follow-up' },
+];
 
 export default function StageMandatoryTaskModal({
   isOpen,
@@ -25,12 +55,18 @@ export default function StageMandatoryTaskModal({
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [type, setType] = useState<'manual' | 'field' | 'task_standard'>('manual');
+  const [targetId, setTargetId] = useState('');
+  const [rule, setRule] = useState<'filled' | 'created' | 'completed'>('completed');
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setTitle(stage.mandatory_task_title || '');
       setDescription(stage.mandatory_task_description || '');
+      setType(stage.mandatory_task_type || 'manual');
+      setTargetId(stage.mandatory_task_target_id || '');
+      setRule(stage.mandatory_task_rule || 'completed');
     }
   }, [isOpen, stage]);
 
@@ -47,6 +83,9 @@ export default function StageMandatoryTaskModal({
         .update({
           mandatory_task_title: title.trim() || null,
           mandatory_task_description: description.trim() || null,
+          mandatory_task_type: type,
+          mandatory_task_target_id: targetId || null,
+          mandatory_task_rule: rule,
           updated_at: new Date().toISOString(),
         })
         .eq('id', stage.id);
@@ -61,7 +100,9 @@ export default function StageMandatoryTaskModal({
         details: { 
           action: 'update_mandatory_task',
           title: title.trim() || null,
-          description: description.trim() || null
+          type,
+          targetId,
+          rule
         }
       });
 
@@ -93,7 +134,7 @@ export default function StageMandatoryTaskModal({
           <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: stage.color }} />
           <div>
             <h2 className="text-base font-bold text-gray-900">Tarefa Obrigatória — {stage.label}</h2>
-            <p className="text-xs text-gray-400">Exigir conclusão de tarefa ao entrar nesta etapa</p>
+            <p className="text-xs text-gray-400">Exigir validação ao entrar nesta etapa</p>
           </div>
           <button onClick={onClose} className="ml-auto w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 cursor-pointer">
             <i className="ri-close-line text-gray-500" />
@@ -101,9 +142,80 @@ export default function StageMandatoryTaskModal({
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
           <div>
-            <label className={lbl}>Título da Tarefa</label>
+            <label className={lbl}>Tipo de Validação</label>
+            <select 
+              value={type} 
+              onChange={e => {
+                const newType = e.target.value as any;
+                setType(newType);
+                if (newType === 'field') setRule('filled');
+                else if (newType === 'task_standard') setRule('completed');
+                else setRule('completed');
+              }}
+              className={inp}
+            >
+              <option value="manual">Tarefa Manual (Check de feito)</option>
+              <option value="field">Campo do Sistema (Preenchimento)</option>
+              <option value="task_standard">Tarefa Padrão (Criada/Concluída)</option>
+            </select>
+          </div>
+
+          {type === 'field' && (
+            <div>
+              <label className={lbl}>Campo do Sistema</label>
+              <select 
+                value={targetId} 
+                onChange={e => setTargetId(e.target.value)}
+                className={inp}
+              >
+                <option value="">Selecione um campo</option>
+                {SYSTEM_FIELDS.map(f => (
+                  <option key={f.id} value={f.id}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {type === 'task_standard' && (
+            <div>
+              <label className={lbl}>Tipo de Tarefa</label>
+              <select 
+                value={targetId} 
+                onChange={e => setTargetId(e.target.value)}
+                className={inp}
+              >
+                <option value="">Selecione o tipo</option>
+                {TASK_TYPES.map(t => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {type !== 'manual' && (
+            <div>
+              <label className={lbl}>Regra de Validação</label>
+              <select 
+                value={rule} 
+                onChange={e => setRule(e.target.value as any)}
+                className={inp}
+              >
+                {type === 'field' ? (
+                  <option value="filled">Campo Preenchido</option>
+                ) : (
+                  <>
+                    <option value="created">Tarefa Criada</option>
+                    <option value="completed">Tarefa Concluída</option>
+                  </>
+                )}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className={lbl}>Título da Tarefa / Alerta</label>
             <input 
               type="text" 
               value={title} 
@@ -121,7 +233,7 @@ export default function StageMandatoryTaskModal({
               value={description} 
               onChange={e => setDescription(e.target.value)}
               placeholder="Descreva o que o usuário deve fazer ou conferir..." 
-              className={`${inp} min-h-[100px] resize-none`}
+              className={`${inp} min-h-[80px] resize-none`}
             />
           </div>
         </div>

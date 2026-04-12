@@ -11,6 +11,9 @@ export interface FunnelStage {
   description?: string;
   mandatory_task_title?: string;
   mandatory_task_description?: string;
+  mandatory_task_type?: 'manual' | 'field' | 'task_standard';
+  mandatory_task_target_id?: string;
+  mandatory_task_rule?: 'filled' | 'created' | 'completed';
 }
 
 const CACHE_KEY = 'crm_funnel_stages_cache';
@@ -114,6 +117,9 @@ export function useFunnelStages(funnelId?: string) {
           description: s.description ?? null,
           mandatory_task_title: s.mandatory_task_title ?? null,
           mandatory_task_description: s.mandatory_task_description ?? null,
+          mandatory_task_type: s.mandatory_task_type ?? 'manual',
+          mandatory_task_target_id: s.mandatory_task_target_id ?? null,
+          mandatory_task_rule: s.mandatory_task_rule ?? 'completed',
           updated_at: new Date().toISOString(),
         };
       });
@@ -140,13 +146,20 @@ export function useFunnelStages(funnelId?: string) {
   }, [funnelId]);
 
   // Formato completo incluindo description para tooltips e mandatory tasks
-  const stagesSimple = stages.map(({ id, label, color, description, mandatory_task_title, mandatory_task_description }) => ({ 
+  const stagesSimple = stages.map(({ 
+    id, label, color, description, 
+    mandatory_task_title, mandatory_task_description,
+    mandatory_task_type, mandatory_task_target_id, mandatory_task_rule
+  }) => ({ 
     id, 
     label, 
     color, 
     description,
     mandatory_task_title,
-    mandatory_task_description
+    mandatory_task_description,
+    mandatory_task_type,
+    mandatory_task_target_id,
+    mandatory_task_rule
   }));
 
   return { stages: stagesSimple, loading, saveStages, reloadStages: loadStages };
