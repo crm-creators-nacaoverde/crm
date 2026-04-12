@@ -608,17 +608,22 @@ export default function KanbanSection() {
                   <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedReason === '__outro' ? (pendingDrop.stageId === 'won' ? 'border-emerald-500 bg-emerald-500' : 'border-rose-500 bg-rose-500') : 'border-gray-300'}`}>
                     {selectedReason === '__outro' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
                   </div>
-                  <span className="text-sm text-gray-700">Outro motivo</span>
-                  <input type="radio" className="sr-only" checked={selectedReason === '__outro'} onChange={() => setSelectedReason('__outro')} />
-                </label>
-              </div>
+                    <span className="text-sm text-gray-700">Outro motivo</span>
+                    <input type="radio" className="sr-only" checked={selectedReason === '__outro'} onChange={() => setSelectedReason('__outro')} />
+                  </label>
+                </div>
 
-              {selectedReason === '__outro' && (
-                <input type="text" value={customReason} onChange={e => setCustomReason(e.target.value)}
-                  placeholder="Descreva o motivo..."
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6]" />
-              )}
-            </div>
+                {/* Campo de justificativa manual (sempre visível ou condicional ao "Outro") */}
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Justificativa Adicional</p>
+                  <textarea
+                    value={customReason}
+                    onChange={e => setCustomReason(e.target.value)}
+                    placeholder={selectedReason === '__outro' ? "Descreva o motivo detalhadamente..." : "Observações adicionais (opcional)..."}
+                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] min-h-[80px] resize-none"
+                  />
+                </div>
+              </div>
 
             <div className="flex gap-2 px-5 pb-5">
               <button onClick={() => { setPendingDrop(null); setSelectedReason(''); setCustomReason(''); }}
@@ -628,22 +633,70 @@ export default function KanbanSection() {
               <button
                 disabled={!selectedReason || (selectedReason === '__outro' && !customReason.trim())}
                 onClick={async () => {
-                  const reason = selectedReason === '__outro'
-                    ? customReason.trim()
-                    : outcomeReasons.find(r => r.id === selectedReason)?.name || '';
+                  const baseReason = outcomeReasons.find(r => r.id === selectedReason)?.name || (selectedReason === '__outro' ? 'Outro' : '');
+                  const additionalJustification = customReason.trim();
+                  
+                  // Se for "Outro", a justificativa manual é obrigatória e se torna o motivo principal
+                  // Caso contrário, concatenamos se houver justificativa
+                  const finalReason = selectedReason === '__outro' 
+                    ? additionalJustification 
+                    : (additionalJustification ? `${baseReason} - ${additionalJustification}` : baseReason);
+
+                  const isLost = !(pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_'));
                   
                   // Salvar motivo junto com a atualização do stage
                   await supabase.from('deals').update({
                     stage: pendingDrop.stageId,
-                    outcome_reason: reason,
+                    outcome_reason: finalReason,
                     updated_at: new Date().toISOString(),
                   }).eq('id', pendingDrop.dealId);
                   
+                  // Log Geral do Sistema
                   await logActivity({
                     action: 'update', module: 'deals',
                     entityId: pendingDrop.dealId, entityName: pendingDrop.dealTitle,
-                    details: { action: 'move_stage', to: pendingDrop.stageId, reason },
+                    details: { 
+                      action: 'move_stage', 
+                      to: pendingDrop.stageId, 
+                      reason: finalReason,
+                      is_outcome: true,
+                      outcome_type: isLost ? 'lost' : 'won'
+                    },
                   });
+
+                  // Log no Histórico do Creator
+                  if (pendingDrop.dealId) {
+                    // Buscar o client_id do deal para registrar no histórico do creator
+                    const { data: dealData } = await supabase
+                      .from('deals')
+                      .select('client_id, stage')
+                      .eq('id', pendingDrop.dealId)
+                      .single();
+
+                    if (dealData?.client_id) {
+                      const fromStageLabel = stages.find(s => s.id === (deals.find(d => d.id === pendingDrop.dealId)?.stage))?.label || 'Etapa anterior';
+                      const toStageLabel = stages.find(s => s.id === pendingDrop.stageId)?.label || (isLost ? 'Perdido' : 'Ganho');
+                      
+                      await logClientEvent({
+                        client_id: dealData.client_id,
+                        ...historyEvent.movimentacao(fromStageLabel, toStageLabel, pendingDrop.dealTitle)
+                      });
+
+                      // Log específico de perda/ganho com a justificativa
+                      await logClientEvent({
+                        client_id: dealData.client_id,
+                        event_type: 'resultado',
+                        title: isLost ? 'Negociação Perdida' : 'Negociação Ganha',
+                        description: `Motivo/Justificativa: ${finalReason}`,
+                        metadata: { 
+                          deal_id: pendingDrop.dealId, 
+                          deal_title: pendingDrop.dealTitle,
+                          reason: finalReason,
+                          outcome: isLost ? 'lost' : 'won'
+                        }
+                      });
+                    }
+                  }
                   
                   setPendingDrop(null); setSelectedReason(''); setCustomReason('');
                   await loadData();
