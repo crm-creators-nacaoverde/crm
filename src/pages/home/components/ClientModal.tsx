@@ -84,6 +84,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
 
   const [form, setForm] = useState({
     name: '',
+    email: '',
     phone: '',
     cpf_cnpj: '',
     platform: 'TikTok',
@@ -128,6 +129,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
     if (client) {
       setForm({
         name: client.name || '',
+        email: client.email || '',
         phone: client.phone || '',
         cpf_cnpj: client.cpf_cnpj || '',
         platform: client.platform || 'TikTok',
@@ -170,7 +172,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
       setTiktokLinks(client.tiktok_links?.length ? [...client.tiktok_links] : ['']);
     } else {
       setForm({
-        name: '', phone: '', cpf_cnpj: '', platform: 'TikTok',
+        name: '', email: '', phone: '', cpf_cnpj: '', platform: 'TikTok',
         category: 'Creators', capture_source: '',
         instagram_profile: '', youtube_canal: '',
         gmv_geral: '', produtos_divulgados: '',
@@ -237,7 +239,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
     const validLinks = tiktokLinks.filter(l => l.trim());
     return {
       name: form.name,
-      email: form.name.toLowerCase().replace(/\s+/g, '.') + '@creator.com',
+      email: form.email || (form.name.toLowerCase().replace(/\s+/g, '.') + '@creator.com'),
       phone: form.phone,
       cpf_cnpj: form.cpf_cnpj,
       platform: form.platform,
@@ -295,6 +297,7 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         // Registrar alterações no histórico
         const fieldLabels: Record<string, string> = {
           name: 'Nome',
+          email: 'E-mail',
           phone: 'Telefone',
           cpf_cnpj: 'CPF/CNPJ',
           platform: 'Plataforma',
@@ -395,15 +398,25 @@ export default function ClientModal({ isOpen, onClose, client, onSave }: ClientM
         {/* ── TAB: Dados do Creator ── */}
         {activeTab === 'obrigatorio' && (
           <div className="space-y-4">
-            {/* Nome + Telefone */}
+            {/* Nome + E-mail + Telefone */}
             <div className="grid grid-cols-2 gap-4">
-              <div>
+              <div className="col-span-2">
                 <label className={labelClass}>Nome <span className="text-rose-500">*</span></label>
                 <input type="text" value={form.name}
                   onChange={e => setForm({ ...form, name: e.target.value })}
                   placeholder="Nome completo do creator"
                   className={`${inputClass} ${errors.name ? 'border-rose-300' : ''}`} />
                 {errors.name && <p className={errorClass}>{errors.name}</p>}
+              </div>
+              <div>
+                <label className={labelClass}>E-mail</label>
+                <div className="relative">
+                  <i className="ri-mail-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                  <input type="email" value={form.email}
+                    onChange={e => setForm({ ...form, email: e.target.value })}
+                    placeholder="email@exemplo.com"
+                    className={`${inputClass} pl-9`} />
+                </div>
               </div>
               <div>
                 <label className={labelClass}>Telefone (WhatsApp) <span className="text-rose-500">*</span></label>
