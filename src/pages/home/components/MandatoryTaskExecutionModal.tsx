@@ -146,7 +146,8 @@ export default function MandatoryTaskExecutionModal({
           completed_by_name: user?.user_metadata?.full_name || user?.email,
           created_by: 'system',
         });
-           if (error) throw error;
+        if (error) throw error;
+      }
 
       // Registrar no histórico do creator
       if (deal.client_id) {
