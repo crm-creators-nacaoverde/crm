@@ -15,7 +15,12 @@ const TOUR_COMPLETED_KEY = 'crm_tour_completed';
 const TOUR_ACTIVE_KEY = 'crm_tour_active';
 const TOUR_STEP_KEY = 'crm_tour_step';
 
-export default function SystemTour() {
+interface SystemTourProps {
+  startTrigger?: boolean;
+  onTourStart?: () => void;
+}
+
+export default function SystemTour({ startTrigger, onTourStart }: SystemTourProps) {
   const { profile, hasPermission } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -199,9 +204,14 @@ export default function SystemTour() {
     return steps;
   }, [profile, hasPermission]);
 
-  // Inicializar o tour na primeira vez
+  // Inicializar o tour na primeira vez ou via trigger externo
   useEffect(() => {
     if (!profile) return;
+
+    if (startTrigger) {
+      startTour();
+      return;
+    }
 
     const tourCompleted = localStorage.getItem(TOUR_COMPLETED_KEY);
     const tourActive = localStorage.getItem(TOUR_ACTIVE_KEY);
@@ -216,7 +226,7 @@ export default function SystemTour() {
       setCurrentStep(step);
       setIsActive(true);
     }
-  }, [profile]);
+  }, [profile, startTrigger]);
 
   // Persistir o passo atual no localStorage
   useEffect(() => {
@@ -334,6 +344,7 @@ export default function SystemTour() {
   const startTour = () => {
     setCurrentStep(0);
     setIsActive(true);
+    if (onTourStart) onTourStart();
   };
 
   const nextStep = () => {
@@ -368,18 +379,6 @@ export default function SystemTour() {
 
   return (
     <>
-      {/* Botão de Ajuda Flutuante */}
-      <button
-        onClick={startTour}
-        className="fixed bottom-6 right-6 z-50 w-12 h-12 bg-[#004aad] hover:bg-[#003d91] text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-110 group"
-        title="Ajuda / Tour Guiado"
-      >
-        <i className="ri-question-line text-xl"></i>
-        <span className="absolute right-full mr-3 px-2 py-1 bg-gray-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap">
-          Treinamento do Sistema
-        </span>
-      </button>
-
       {/* Overlay e Tooltip do Tour */}
       {isActive && currentStepData && (
         <>

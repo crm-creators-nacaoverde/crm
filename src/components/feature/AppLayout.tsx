@@ -16,6 +16,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [tourTrigger, setTourTrigger] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const { user, profile, loading, signOut, hasPermission } = useAuth();
@@ -330,6 +331,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setTourTrigger(true)}
+            className="w-9 h-9 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition-all cursor-pointer"
+            title="Ajuda / Tour Guiado"
+          >
+            <i className="ri-question-line text-lg"></i>
+          </button>
+
           <div className="relative" ref={notifRef}>
             <button
               onClick={() => setNotifOpen(!notifOpen)}
@@ -422,7 +431,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div className="p-5 lg:p-6">{children}</div>
       </main>
 
-      <SystemTour />
+      <SystemTour 
+        startTrigger={tourTrigger} 
+        onTourStart={() => setTourTrigger(false)} 
+      />
     </div>
     </CadastrosProvider>
   );
