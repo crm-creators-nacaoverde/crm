@@ -343,14 +343,24 @@ function RecentInteractionsOnly({ interactions }: { interactions: (Interaction &
 function GmvOverview({ clients, gmvPeriod }: { clients: Client[]; gmvPeriod: GmvPeriod }) {
   const gmvField = getGmvField(gmvPeriod);
   const periods = [
-    { label: '7 dias',  field: 'gmv_interno_7d' },
-    { label: '14 dias', field: 'gmv_interno_14d' },
-    { label: '28 dias', field: 'gmv_interno_28d' },
-    { label: '30 dias', field: 'gmv_interno_30d' },
+    { label: '7 dias',  field: 'gmv_interno_7d', compareField: null },
+    { label: '14 dias', field: 'gmv_interno_14d', compareField: 'gmv_interno_7d' },
+    { label: '28 dias', field: 'gmv_interno_28d', compareField: 'gmv_interno_14d' },
+    { label: '30 dias', field: 'gmv_interno_30d', compareField: 'gmv_interno_28d' },
   ];
   const total = (field: string) => clients.reduce((s, c) => s + Number((c as any)[field] ?? 0), 0);
   const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   const max = Math.max(...periods.map(p => total(p.field)), 1);
+  
+  const calculateGrowth = (currentField: string, previousField: string | null): { percent: number; isPositive: boolean } | null => {
+    if (!previousField) return null;
+    const current = total(currentField);
+    const previous = total(previousField);
+    if (previous === 0) return null;
+    const percent = ((current - previous) / previous) * 100;
+    return { percent: Math.abs(percent), isPositive: percent >= 0 };
+  };
+  
   return (
     <div className="bg-white rounded-xl border border-gray-100 p-5">
       <h3 className="text-sm font-semibold text-gray-900 mb-4">GMV por Período</h3>
@@ -359,10 +369,27 @@ function GmvOverview({ clients, gmvPeriod }: { clients: Client[]; gmvPeriod: Gmv
           const v = total(p.field);
           const pct = (v / max) * 100;
           const active = p.field === gmvField;
+          const growth = calculateGrowth(p.field, p.compareField);
           return (
             <div key={p.field}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className={`text-sm font-medium ${active ? 'text-[#004aad]' : 'text-gray-700'}`}>{p.label}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm font-medium ${active ? 'text-[#004aad]' : 'text-gray-700'}`}>{p.label}</span>
+                  {growth && (
+                    <div className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-xs font-semibold ${
+                      growth.isPositive 
+                        ? 'bg-emerald-50 text-emerald-700' 
+                        : 'bg-rose-50 text-rose-700'
+                    }`}>
+                      <i className={`text-xs ${
+                        growth.isPositive 
+                          ? 'ri-arrow-up-line' 
+                          : 'ri-arrow-down-line'
+                      }`}></i>
+                      {growth.percent.toFixed(1)}%
+                    </div>
+                  )}
+                </div>
                 <span className={`text-sm font-bold ${active ? 'text-[#004aad]' : 'text-gray-700'}`}>{fmt(v)}</span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2.5">
