@@ -399,14 +399,25 @@ export default function FunnelManagerModal({ isOpen, onClose }: FunnelManagerMod
     const toDelete = [...currentIds].filter(id => !newIds.has(id));
     if (toDelete.length > 0) await supabase.from('funnel_stages').delete().in('id', toDelete);
     await supabase.from('funnel_stages').upsert(
-      newStages.map((s, i) => ({
-        id: s.id, label: s.label, color: s.color,
-        description: s.description ?? null,
-        sort_order: i,
-        is_fixed: s.id === 'won' || s.id === 'lost',
-        funnel_id: configuringFunnelId,
-        updated_at: new Date().toISOString(),
-      })),
+      newStages.map((s, i) => {
+        // Garantir que etapas finais tenham IDs únicos por funil
+        let finalId = s.id;
+        if (configuringFunnelId && (s.id === 'won' || s.id === 'lost' || s.id.startsWith('won_') || s.id.startsWith('lost_'))) {
+          const base = s.id.includes('_') ? s.id.split('_')[0] : s.id;
+          finalId = `${base}_${configuringFunnelId}`;
+        }
+
+        return {
+          id: finalId,
+          label: s.label,
+          color: s.color,
+          description: s.description ?? null,
+          sort_order: i,
+          is_fixed: s.id === 'won' || s.id === 'lost' || s.id.startsWith('won_') || s.id.startsWith('lost_'),
+          funnel_id: configuringFunnelId,
+          updated_at: new Date().toISOString(),
+        };
+      }),
       { onConflict: 'id' }
     );
     await loadStats();
@@ -416,13 +427,14 @@ export default function FunnelManagerModal({ isOpen, onClose }: FunnelManagerMod
     if (!formData.name.trim()) return;
     const result = await createFunnel({ name: formData.name, description: formData.description, color: formData.color, is_default: funnels.length === 0 });
     if (result.success && result.data) {
+      const funnelId = result.data.id;
       const defaultStages = [
         { id: 'sem_contato',  label: 'Sem contato',   color: '#94a3b8', sort_order: 0, is_fixed: false },
         { id: 'contato_feito',label: 'Contato feito',  color: '#3b82f6', sort_order: 1, is_fixed: false },
-        { id: 'won',          label: 'Ganho',          color: '#10b981', sort_order: 2, is_fixed: true },
-        { id: 'lost',         label: 'Perdido',        color: '#ef4444', sort_order: 3, is_fixed: true },
+        { id: `won_${funnelId}`,  label: 'Ganho',          color: '#10b981', sort_order: 2, is_fixed: true },
+        { id: `lost_${funnelId}`, label: 'Perdido',        color: '#ef4444', sort_order: 3, is_fixed: true },
       ];
-      await supabase.from('funnel_stages').insert(defaultStages.map(s => ({ ...s, funnel_id: result.data.id })));
+      await supabase.from('funnel_stages').insert(defaultStages.map(s => ({ ...s, funnel_id: funnelId })));
       await logActivity({ action: 'create', module: 'funnels', entityId: result.data.id, entityName: formData.name, details: { data: formData } });
       setFormData({ name: '', description: '', color: '#3b82f6' });
       setIsCreating(false);
@@ -454,8 +466,18 @@ export default function FunnelManagerModal({ isOpen, onClose }: FunnelManagerMod
     setDuplicatingId(sourceFunnelId);
     const result = await createFunnel({ name: `${src.name} (cópia)`, description: src.description, color: src.color, is_default: false });
     if (result.success && result.data) {
+      const newFunnelId = result.data.id;
       const { data: stages } = await supabase.from('funnel_stages').select('*').eq('funnel_id', sourceFunnelId).order('sort_order');
-      if (stages) await supabase.from('funnel_stages').insert(stages.map(s => ({ id: s.id, label: s.label, color: s.color, sort_order: s.sort_order, is_fixed: s.is_fixed, funnel_id: result.data.id })));
+      if (stages) {
+        await supabase.from('funnel_stages').insert(stages.map(s => {
+          let finalId = s.id;
+          if (s.is_fixed || s.id === 'won' || s.id === 'lost' || s.id.startsWith('won_') || s.id.startsWith('lost_')) {
+            const base = s.id.includes('_') ? s.id.split('_')[0] : s.id;
+            finalId = `${base}_${newFunnelId}`;
+          }
+          return { id: finalId, label: s.label, color: s.color, sort_order: s.sort_order, is_fixed: s.is_fixed, funnel_id: newFunnelId };
+        }));
+      }
       await reloadFunnels(); await loadStats();
     }
     setDuplicatingId(null);
