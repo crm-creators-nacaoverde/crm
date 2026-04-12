@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useActivityLog } from '../../../hooks/useActivityLog';
+import { useClientHistory, historyEvent } from '../../../hooks/useClientHistory';
 
 export interface DealTask {
   id: string;
@@ -75,6 +76,7 @@ export default function DealTasksSection({ dealId, clientId, dealTitle }: DealTa
   const [filterTab, setFilterTab] = useState<'pending' | 'all'>('pending');
   const { user, profile } = useAuth();
   const { logActivity } = useActivityLog();
+  const { logClientEvent } = useClientHistory();
 
   const [form, setForm] = useState({
     title: '', description: '', type: 'task',
@@ -124,6 +126,14 @@ export default function DealTasksSection({ dealId, clientId, dealTitle }: DealTa
       }]);
       if (error) throw error;
       await logActivity({ action: 'create', module: 'tasks', entityName: form.title.trim(), details: { dealId, dealTitle, type: form.type, priority: form.priority } });
+      
+      if (clientId) {
+        await logClientEvent({
+          client_id: clientId,
+          ...historyEvent.tarefaCriada(form.title.trim())
+        });
+      }
+      
       resetForm();
       setShowAddForm(false);
       setShowSuggestions(false);
@@ -143,6 +153,14 @@ export default function DealTasksSection({ dealId, clientId, dealTitle }: DealTa
         updated_at: new Date().toISOString(),
       }).eq('id', task.id);
       await logActivity({ action: 'update', module: 'tasks', entityId: task.id, entityName: task.title, details: { is_completed: nowCompleting } });
+      
+      if (nowCompleting && task.client_id) {
+        await logClientEvent({
+          client_id: task.client_id,
+          ...historyEvent.tarefaConcluida(task.title)
+        });
+      }
+      
       await loadTasks();
     } catch (err) { console.error(err); }
   };
@@ -150,7 +168,16 @@ export default function DealTasksSection({ dealId, clientId, dealTitle }: DealTa
   const handleDelete = async (id: string) => {
     const task = tasks.find(t => t.id === id);
     await supabase.from('deal_tasks').delete().eq('id', id);
-    if (task) await logActivity({ action: 'delete', module: 'tasks', entityId: id, entityName: task.title });
+    if (task) {
+      await logActivity({ action: 'delete', module: 'tasks', entityId: id, entityName: task.title });
+      
+      if (task.client_id) {
+        await logClientEvent({
+          client_id: task.client_id,
+          ...historyEvent.exclusaoDado('Tarefa', task.title)
+        });
+      }
+    }
     await loadTasks();
   };
 

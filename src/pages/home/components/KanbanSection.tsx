@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useActivityLog } from '../../../hooks/useActivityLog';
+import { useClientHistory, historyEvent } from '../../../hooks/useClientHistory';
 import KanbanToolbar from './KanbanToolbar';
 import KanbanColumn from './KanbanColumn';
 import KanbanDealModal from './KanbanDealModal';
@@ -91,6 +92,7 @@ export default function KanbanSection() {
   const [customReason, setCustomReason] = useState('');
   const { user } = useAuth();
   const { logActivity } = useActivityLog();
+  const { logClientEvent } = useClientHistory();
 
   useEffect(() => {
     supabase.from('deal_outcome_reasons').select('id, name, type')
@@ -331,6 +333,17 @@ export default function KanbanSection() {
             to: newStage?.label || stageId
           }
         });
+        
+        if (draggedDeal.client_id) {
+          await logClientEvent({
+            client_id: draggedDeal.client_id,
+            ...historyEvent.movimentacao(
+              oldStage?.label || draggedDeal.stage,
+              newStage?.label || stageId,
+              draggedDeal.title
+            )
+          });
+        }
 
         // 🤖 Disparar automações configuradas para esta etapa
         await executeAutomations(

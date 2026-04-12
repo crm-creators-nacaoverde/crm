@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase, Interaction, Client, UserProfile } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useActivityLog } from '../../../hooks/useActivityLog';
+import { useClientHistory, historyEvent } from '../../../hooks/useClientHistory';
 import Button from '../../../components/base/Button';
 import Input from '../../../components/base/Input';
 import Modal from '../../../components/base/Modal';
@@ -18,6 +19,7 @@ export default function InteractionsSection() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const { user, hasPermission } = useAuth();
   const { logActivity } = useActivityLog();
+  const { logClientEvent } = useClientHistory();
   const [interactionTypes, setInteractionTypes] = useState<{ id: string; name: string; icon: string; color: string }[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [filters, setFilters] = useState({
@@ -147,6 +149,13 @@ export default function InteractionsSection() {
           entityName: interactionToDelete.title,
           details: { deletedData: interactionToDelete }
         });
+        
+        if (interactionToDelete.client_id) {
+          await logClientEvent({
+            client_id: interactionToDelete.client_id,
+            ...historyEvent.exclusaoDado('Interacao', interactionToDelete.title)
+          });
+        }
       }
       
       await loadData();
@@ -181,6 +190,13 @@ export default function InteractionsSection() {
           entityName: formData.title,
           details: { before: selectedInteraction, after: interactionData }
         });
+        
+        if (formData.client_id) {
+          await logClientEvent({
+            client_id: formData.client_id,
+            ...historyEvent.interacaoRegistrada(formData.type, formData.title)
+          });
+        }
       } else {
         const { data: newInteraction, error } = await supabase.from('interactions').insert([interactionData]).select().single();
         if (error) throw error;
@@ -192,6 +208,13 @@ export default function InteractionsSection() {
           entityName: formData.title,
           details: { data: interactionData }
         });
+        
+        if (formData.client_id) {
+          await logClientEvent({
+            client_id: formData.client_id,
+            ...historyEvent.interacaoRegistrada(formData.type, formData.title)
+          });
+        }
       }
       await loadData();
       setIsModalOpen(false);

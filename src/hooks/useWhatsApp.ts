@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useClientHistory, historyEvent } from './useClientHistory';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface WaConversation {
@@ -51,6 +52,7 @@ export interface WaConfig {
 
 export function useWhatsApp() {
   const { profile, user } = useAuth();
+  const { logClientEvent } = useClientHistory();
   const [conversations, setConversations] = useState<WaConversation[]>([]);
   const [messages, setMessages] = useState<WaMessage[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -239,21 +241,7 @@ export function useWhatsApp() {
 
   // ── Assumir conversa ──────────────────────────────────────────────────────
   const assignConversation = useCallback(async (convId: string, userId: string, userName: string) => {
-    await supabase.from('wa_conversations').update({
-      assigned_to: userId,
-      assigned_name: userName,
-      status: 'open',
-      updated_at: new Date().toISOString(),
-    }).eq('id', convId);
-    await loadConversations();
-  }, [loadConversations]);
-
-  // ── Transferir conversa ───────────────────────────────────────────────────
-  const transferConversation = useCallback(async (
-    convId: string,
-    userId: string,
-    userName: string,
-  ) => {
+    const conv = conversations.find(c => c.id === convId);
     await supabase.from('wa_conversations').update({
       assigned_to: userId,
       assigned_name: userName,
@@ -261,11 +249,52 @@ export function useWhatsApp() {
       updated_at: new Date().toISOString(),
     }).eq('id', convId);
     
+    // Registrar no histórico do creator
+    if (conv?.client_id) {
+      await logClientEvent({
+        client_id: conv.client_id,
+        event_type: 'interacao',
+        title: 'Conversa WhatsApp assumida',
+        description: `Atribuída a ${userName}`,
+        metadata: { conversation_id: convId, assigned_to: userId }
+      });
+    }
+    
+    await loadConversations();
+  }, [loadConversations, conversations, logClientEvent]);
+
+  // ── Transferir conversa ───────────────────────────────────────────────────
+  const transferConversation = useCallback(async (
+    convId: string,
+    userId: string,
+    userName: string,
+  ) => {
+    const conv = conversations.find(c => c.id === convId);
+    const previousAssignee = conv?.assigned_name || 'Ninguém';
+    
+    await supabase.from('wa_conversations').update({
+      assigned_to: userId,
+      assigned_name: userName,
+      status: 'open',
+      updated_at: new Date().toISOString(),
+    }).eq('id', convId);
+    
+    // Registrar no histórico do creator
+    if (conv?.client_id) {
+      await logClientEvent({
+        client_id: conv.client_id,
+        event_type: 'interacao',
+        title: 'Conversa WhatsApp transferida',
+        description: `De ${previousAssignee} para ${userName}`,
+        metadata: { conversation_id: convId, from: previousAssignee, to: userId }
+      });
+    }
+    
     if (activeConvId === convId) {
       setActiveConvId(null);
     }
     await loadConversations();
-  }, [activeConvId, loadConversations]);
+  }, [activeConvId, loadConversations, conversations, logClientEvent]);
 
   // ── Vincular creator ──────────────────────────────────────────────────────
   const linkClient = useCallback(async (convId: string, clientId: string, clientName: string) => {
@@ -274,8 +303,18 @@ export function useWhatsApp() {
       client_name: clientName,
       updated_at: new Date().toISOString(),
     }).eq('id', convId);
+    
+    // Registrar no histórico do creator
+    await logClientEvent({
+      client_id: clientId,
+      event_type: 'interacao',
+      title: 'Conversa WhatsApp vinculada',
+      description: 'Conversa iniciada via WhatsApp',
+      metadata: { conversation_id: convId }
+    });
+    
     await loadConversations();
-  }, [loadConversations]);
+  }, [loadConversations, logClientEvent]);
 
   // ── Encerrar conversa ─────────────────────────────────────────────────────
   const closeConversation = useCallback(async (
@@ -285,6 +324,8 @@ export function useWhatsApp() {
     funnelId: string | null,
     stageId: string | null,
   ) => {
+    const conv = conversations.find(c => c.id === convId);
+    
     await supabase.from('wa_conversations').update({
       status: 'closed',
       outcome,
@@ -293,6 +334,17 @@ export function useWhatsApp() {
       stage_id: stageId,
       updated_at: new Date().toISOString(),
     }).eq('id', convId);
+
+    // Registrar no histórico do creator
+    if (conv?.client_id) {
+      await logClientEvent({
+        client_id: conv.client_id,
+        event_type: 'interacao',
+        title: `Conversa WhatsApp encerrada (${outcome === 'won' ? 'Ganho' : 'Perdido'})`,
+        description: `Status: ${outcome === 'won' ? 'Ganho' : 'Perdido'}`,
+        metadata: { conversation_id: convId, outcome, outcome_reason_id: outcomeReasonId }
+      });
+    }
 
     const conv = conversations.find(c => c.id === convId);
     if (conv?.client_id && funnelId && stageId) {
@@ -329,6 +381,16 @@ export function useWhatsApp() {
     clientId: string | null,
     clientName: string,
   ): Promise<string | null> => {
+    // Registrar no histórico do creator se houver vinculação
+    if (clientId) {
+      await logClientEvent({
+        client_id: clientId,
+        event_type: 'interacao',
+        title: 'Conversa WhatsApp iniciada',
+        description: `Telefone: ${phone}`,
+        metadata: { phone }
+      });
+    }
     let digits = phone.replace(/\D/g, '');
     if (!digits) return null;
     
