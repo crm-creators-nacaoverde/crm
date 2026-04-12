@@ -284,16 +284,19 @@ export default function ClientsSection() {
             {canEdit && (
               <button
                 onClick={() => setIsImportOpen(true)}
+                data-tour="import-clients"
                 className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer">
                 <i className="ri-file-excel-2-line text-sm text-emerald-600"></i>
                 <span className="hidden sm:inline">Importar</span>
               </button>
             )}
             {canEdit && (
-              <Button onClick={handleAddClient} size="md">
-                <i className="ri-add-line text-sm"></i>
-                <span className="hidden sm:inline">Novo Creator</span>
-              </Button>
+              <div data-tour="add-client">
+                <Button onClick={handleAddClient} size="md">
+                  <i className="ri-add-line text-sm"></i>
+                  <span className="hidden sm:inline">Novo Creator</span>
+                </Button>
+              </div>
             )}
           </div>
         </div>

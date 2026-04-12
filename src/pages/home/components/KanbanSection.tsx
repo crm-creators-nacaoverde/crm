@@ -487,43 +487,45 @@ export default function KanbanSection() {
 
   return (
     <div className="space-y-4 relative" data-tour="kanban">
-      <KanbanToolbar
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        filterAssigned={filterAssigned}
-        onFilterAssignedChange={setFilterAssigned}
-        filterStatus={filterStatus}
-        onFilterStatusChange={setFilterStatus}
-        filterAmostra={filterAmostra}
-        onFilterAmostraChange={setFilterAmostra}
-        sortBy={sortBy}
-        onSortByChange={setSortBy}
-        users={users}
-        totalDeals={totalDealsCount}
-        wonDeals={wonDealsCount}
-        lostDeals={lostDealsCount}
-        filterCategory={'all'}
-        onFilterCategoryChange={() => {}}
-        categoryOptions={[]}
-        onCreateDeal={handleCreateDeal}
-        onExport={handleExport}
-        onReload={handleReload}
-        onConfigureFunnel={() => setIsFunnelModalOpen(true)}
-        onManageFunnels={() => setIsFunnelManagerOpen(true)}
-        isReloading={isReloading}
-        stages={stages}
-        hideClosedStages={hideClosedStages}
-        onToggleClosedStages={handleToggleClosedStages}
-        selectedFunnelId={selectedFunnelId}
-        funnels={funnels.map(f => ({ id: f.id, name: f.name, color: f.color }))}
-        currentUserId={user?.id}
-        onFunnelChange={selectFunnel}
-      />
+      <div data-tour="kanban-toolbar">
+        <KanbanToolbar
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          filterAssigned={filterAssigned}
+          onFilterAssignedChange={setFilterAssigned}
+          filterStatus={filterStatus}
+          onFilterStatusChange={setFilterStatus}
+          filterAmostra={filterAmostra}
+          onFilterAmostraChange={setFilterAmostra}
+          sortBy={sortBy}
+          onSortByChange={setSortBy}
+          users={users}
+          totalDeals={totalDealsCount}
+          wonDeals={wonDealsCount}
+          lostDeals={lostDealsCount}
+          filterCategory={'all'}
+          onFilterCategoryChange={() => {}}
+          categoryOptions={[]}
+          onCreateDeal={handleCreateDeal}
+          onExport={handleExport}
+          onReload={handleReload}
+          onConfigureFunnel={() => setIsFunnelModalOpen(true)}
+          onManageFunnels={() => setIsFunnelManagerOpen(true)}
+          isReloading={isReloading}
+          stages={stages}
+          hideClosedStages={hideClosedStages}
+          onToggleClosedStages={handleToggleClosedStages}
+          selectedFunnelId={selectedFunnelId}
+          funnels={funnels.map(f => ({ id: f.id, name: f.name, color: f.color }))}
+          currentUserId={user?.id}
+          onFunnelChange={selectFunnel}
+        />
+      </div>
 
       {viewMode === 'board' ? (
-        <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 'calc(100vh - 240px)' }}>
+        <div data-tour="kanban-board" className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 'calc(100vh - 240px)' }}>
           {visibleStages.map(stage => (
             <KanbanColumn
               key={stage.id}
