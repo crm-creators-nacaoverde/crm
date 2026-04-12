@@ -7,11 +7,13 @@ interface TourStep {
   title: string;
   content: string;
   placement?: 'top' | 'bottom' | 'left' | 'right';
-  path?: string; // Caminho para onde o tour deve navegar antes de mostrar o passo
-  action?: () => void; // Ação opcional a ser executada antes do passo
+  path?: string;
+  action?: () => void;
 }
 
 const TOUR_COMPLETED_KEY = 'crm_tour_completed';
+const TOUR_ACTIVE_KEY = 'crm_tour_active';
+const TOUR_STEP_KEY = 'crm_tour_step';
 
 export default function SystemTour() {
   const { profile, hasPermission } = useAuth();
@@ -22,6 +24,7 @@ export default function SystemTour() {
   const [currentStep, setCurrentStep] = useState(0);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const navigationTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Define os passos dinamicamente com base nas permissões
   const tourSteps = useMemo(() => {
@@ -170,11 +173,10 @@ export default function SystemTour() {
 
     if (hasPermission('users', 'view')) {
       steps.push({
-        target: 'a[href="/users"], button[data-tour="menu-users"]',
+        target: '[data-tour="menu-users"]',
         title: '👥 Equipe e Permissões',
         content: 'Gerencie sua equipe, crie novos usuários e defina exatamente o que cada um pode ver ou editar no sistema.',
-        placement: 'right',
-        path: '/users'
+        placement: 'right'
       });
     }
 
@@ -197,34 +199,69 @@ export default function SystemTour() {
     return steps;
   }, [profile, hasPermission]);
 
+  // Inicializar o tour na primeira vez
   useEffect(() => {
+    if (!profile) return;
+
     const tourCompleted = localStorage.getItem(TOUR_COMPLETED_KEY);
-    if (!tourCompleted && profile) {
+    const tourActive = localStorage.getItem(TOUR_ACTIVE_KEY);
+    
+    if (!tourCompleted && !tourActive) {
       setTimeout(() => {
         startTour();
       }, 1500);
+    } else if (tourActive === 'true') {
+      const savedStep = localStorage.getItem(TOUR_STEP_KEY);
+      const step = savedStep ? parseInt(savedStep, 10) : 0;
+      setCurrentStep(step);
+      setIsActive(true);
     }
   }, [profile]);
 
-  // Lógica de navegação automática entre passos
+  // Persistir o passo atual no localStorage
   useEffect(() => {
     if (isActive) {
-      const step = tourSteps[currentStep];
-      if (step?.path && location.pathname !== step.path) {
-        navigate(step.path);
+      localStorage.setItem(TOUR_ACTIVE_KEY, 'true');
+      localStorage.setItem(TOUR_STEP_KEY, currentStep.toString());
+    }
+  }, [isActive, currentStep]);
+
+  // Lógica de navegação automática entre passos
+  useEffect(() => {
+    if (!isActive || !tourSteps[currentStep]) return;
+
+    const step = tourSteps[currentStep];
+    
+    // Se o passo requer uma navegação e não estamos na página certa
+    if (step.path && location.pathname !== step.path) {
+      // Limpar timeout anterior se existir
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
       }
       
-      // Pequeno delay para garantir que o DOM renderizou após navegação
-      const timer = setTimeout(updatePosition, 300);
+      // Navegar e aguardar renderização
+      navigate(step.path);
       
-      window.addEventListener('resize', updatePosition);
-      window.addEventListener('scroll', updatePosition);
-      return () => {
-        clearTimeout(timer);
-        window.removeEventListener('resize', updatePosition);
-        window.removeEventListener('scroll', updatePosition);
-      };
+      // Tentar atualizar posição após navegação
+      navigationTimeoutRef.current = setTimeout(() => {
+        updatePosition();
+      }, 500);
+    } else {
+      // Se já estamos na página correta, atualizar posição imediatamente
+      updatePosition();
     }
+
+    // Event listeners para resize e scroll
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition);
+    
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition);
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+      }
+    };
   }, [isActive, currentStep, location.pathname, tourSteps]);
 
   const updatePosition = () => {
@@ -234,7 +271,6 @@ export default function SystemTour() {
     const target = document.querySelector(step.target);
     
     if (step.target !== 'body' && !target) {
-      // Se o alvo não existe na tela atual, tenta re-posicionar o tooltip no centro
       setPosition({ 
         top: window.innerHeight / 2 - 100, 
         left: window.innerWidth / 2 - 200 
@@ -247,13 +283,12 @@ export default function SystemTour() {
         top: window.innerHeight / 2 - 100, 
         left: window.innerWidth / 2 - 200 
       });
-      // Remove highlights anteriores
       document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
       return;
     }
 
     const targetRect = target!.getBoundingClientRect();
-    const tooltipWidth = 400; // max-w-md
+    const tooltipWidth = 400;
     const tooltipHeight = tooltipRef.current?.offsetHeight || 200;
     const placement = step.placement || 'bottom';
 
@@ -279,7 +314,6 @@ export default function SystemTour() {
         break;
     }
 
-    // Ajustar para não sair da tela
     const padding = 20;
     if (left < padding) left = padding;
     if (left + tooltipWidth > window.innerWidth - padding) {
@@ -292,7 +326,6 @@ export default function SystemTour() {
 
     setPosition({ top, left });
 
-    // Highlight do elemento
     document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
     target!.classList.add('tour-highlight');
     target!.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -324,6 +357,8 @@ export default function SystemTour() {
   const completeTour = () => {
     setIsActive(false);
     localStorage.setItem(TOUR_COMPLETED_KEY, 'true');
+    localStorage.removeItem(TOUR_ACTIVE_KEY);
+    localStorage.removeItem(TOUR_STEP_KEY);
     document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
   };
 
@@ -348,7 +383,7 @@ export default function SystemTour() {
       {/* Overlay e Tooltip do Tour */}
       {isActive && currentStepData && (
         <>
-          {/* Overlay escuro com furo (via box-shadow no highlight) */}
+          {/* Overlay escuro */}
           <div className="fixed inset-0 bg-black/40 z-[9998] transition-opacity duration-300" onClick={skipTour} />
 
           {/* Tooltip */}
@@ -430,11 +465,6 @@ export default function SystemTour() {
           pointer-events: none !important;
           border-radius: 12px !important;
           background-color: white !important;
-        }
-        
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </>
