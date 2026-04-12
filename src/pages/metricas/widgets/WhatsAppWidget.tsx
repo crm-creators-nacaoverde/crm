@@ -31,6 +31,52 @@ export default function WhatsAppWidget({ period = '30d' }: Props) {
   const [stats, setStats] = useState<WhatsAppStats | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const calculateBusinessMinutes = (start: Date, end: Date) => {
+    if (start > end) return 0;
+
+    const holidays = [
+      "01-01", // Ano Novo
+      "21-04", // Tiradentes
+      "01-05", // Dia do Trabalho
+      "07-09", // Independência
+      "12-10", // Nossa Senhora Aparecida
+      "02-11", // Finados
+      "15-11", // Proclamação da República
+      "20-11", // Dia da Consciência Negra
+      "25-12", // Natal
+    ];
+
+    let totalMinutes = 0;
+    let current = new Date(start.getTime());
+
+    // Loop minuto a minuto para precisão (limite de 24h para performance)
+    const maxMinutes = 1440; 
+    let count = 0;
+
+    while (current < end && count < maxMinutes) {
+      const day = current.getDay(); // 0=Domingo, 1=Segunda, ..., 6=Sábado
+      const monthDay = `${String(current.getDate()).padStart(2, '0')}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+      const isHoliday = holidays.includes(monthDay);
+
+      if (!isHoliday && day !== 0) { // Não é feriado nem domingo
+        const hour = current.getHours();
+        if (day >= 1 && day <= 5) { // Segunda a Sexta: 08:00 as 17:00
+          if (hour >= 8 && hour < 17) {
+            totalMinutes++;
+          }
+        } else if (day === 6) { // Sábado: 08:00 as 13:00
+          if (hour >= 8 && hour < 13) {
+            totalMinutes++;
+          }
+        }
+      }
+      current.setMinutes(current.getMinutes() + 1);
+      count++;
+    }
+
+    return totalMinutes;
+  };
+
   useEffect(() => {
     const fetchWhatsApp = async () => {
       setLoading(true);
@@ -126,16 +172,16 @@ export default function WhatsAppWidget({ period = '30d' }: Props) {
             .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0];
 
           if (firstInbound && firstOutbound) {
-            const diff = (new Date(firstOutbound.created_at).getTime() - new Date(firstInbound.created_at).getTime()) / (1000 * 60);
-            if (diff > 0 && diff < 1440) { // Limitar a 24h para evitar outliers de conversas antigas
-              totalResponseTime += diff;
-              responseCount++;
+            const diff = calculateBusinessMinutes(new Date(firstInbound.created_at), new Date(firstOutbound.created_at));
+            
+            // Contabilizar apenas se houve resposta (mesmo que imediata)
+            totalResponseTime += diff;
+            responseCount++;
 
-              if (firstOutbound.sent_by && userStatsMap[firstOutbound.sent_by]) {
-                if (!userResponseTimes[firstOutbound.sent_by]) userResponseTimes[firstOutbound.sent_by] = { total: 0, count: 0 };
-                userResponseTimes[firstOutbound.sent_by].total += diff;
-                userResponseTimes[firstOutbound.sent_by].count++;
-              }
+            if (firstOutbound.sent_by && userStatsMap[firstOutbound.sent_by]) {
+              if (!userResponseTimes[firstOutbound.sent_by]) userResponseTimes[firstOutbound.sent_by] = { total: 0, count: 0 };
+              userResponseTimes[firstOutbound.sent_by].total += diff;
+              userResponseTimes[firstOutbound.sent_by].count++;
             }
           }
         });
