@@ -208,4 +208,11 @@ export const historyEvent = {
     title: `${tipo} removido`,
     description: descricao,
   }),
+  
+  tarefaObrigatoriaConcluida: (titulo: string, stageLabel: string) => ({
+    event_type: 'tarefa' as const,
+    title: 'Tarefa obrigatória concluída',
+    description: `${titulo} (Etapa: ${stageLabel})`,
+    metadata: { titulo, stage: stageLabel, is_mandatory: true },
+  }),
 };
