@@ -22,6 +22,7 @@ const SYSTEM_FIELDS: { key: string; label: string; required?: boolean; hint?: st
   { key: 'phone',            label: 'WhatsApp / Telefone', required: true },
   { key: 'email',            label: 'E-mail' },
   { key: 'cpf_cnpj',         label: 'CPF / CNPJ' },
+  { key: 'followers',        label: 'Seguidores' },
   { key: 'instagram_profile',label: 'Instagram' },
   { key: 'youtube_canal',    label: 'YouTube' },
   { key: 'tiktok_main',      label: 'TikTok (canal principal)' },
@@ -321,7 +322,7 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
             if (field !== '__ignore__' && field !== 'name' && field !== 'phone' && !field.startsWith('deal_') && field !== 'tiktok_main') {
               const val = row[col]?.trim();
               if (val) {
-                if (field.includes('gmv') || field.includes('comissao') || field.includes('videos') || field.includes('lives')) {
+                if (field.includes('gmv') || field.includes('comissao') || field.includes('videos') || field.includes('lives') || field === 'followers') {
                   updateData[field] = parseFloat(val.replace(',', '.')) || 0;
                 } else if (field === 'amostra_enviada') {
                   updateData[field] = val.toLowerCase() === 'true' || val === '1' || val.toLowerCase() === 'sim';
@@ -353,7 +354,7 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
         
         const val = row[col]?.trim();
         if (val) {
-          if (field.includes('gmv') || field.includes('comissao') || field.includes('videos') || field.includes('lives')) {
+          if (field.includes('gmv') || field.includes('comissao') || field.includes('videos') || field.includes('lives') || field === 'followers') {
             clientData[field] = parseFloat(val.replace(',', '.')) || 0;
           } else if (field === 'amostra_enviada') {
             clientData[field] = val.toLowerCase() === 'true' || val === '1' || val.toLowerCase() === 'sim';
