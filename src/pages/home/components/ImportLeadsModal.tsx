@@ -21,14 +21,60 @@ const SYSTEM_FIELDS: { key: string; label: string; required?: boolean; hint?: st
   { key: 'name',             label: 'Nome do Creator',   required: true },
   { key: 'phone',            label: 'WhatsApp / Telefone', required: true },
   { key: 'email',            label: 'E-mail' },
+  { key: 'cpf_cnpj',         label: 'CPF / CNPJ' },
   { key: 'instagram_profile',label: 'Instagram' },
   { key: 'youtube_canal',    label: 'YouTube' },
   { key: 'tiktok_main',      label: 'TikTok (canal principal)' },
+  { key: 'platform',         label: 'Plataforma Principal' },
   { key: 'category',         label: 'Categoria' },
-  { key: 'cpf_cnpj',         label: 'CPF / CNPJ' },
+  { key: 'capture_source',   label: 'Fonte de Captação' },
+  { key: 'status',           label: 'Status (active/inactive)' },
   { key: 'notes',            label: 'Observações' },
+  
+  // Endereço
+  { key: 'endereco_cep',     label: 'CEP' },
+  { key: 'endereco_rua',     label: 'Rua / Logradouro' },
+  { key: 'endereco_numero',  label: 'Número' },
+  { key: 'endereco_complemento', label: 'Complemento' },
+  { key: 'endereco_bairro',  label: 'Bairro' },
+  { key: 'endereco_cidade',  label: 'Cidade' },
+  { key: 'endereco_estado',  label: 'Estado (UF)' },
+
+  // Financeiro / PIX
+  { key: 'chave_pix',        label: 'Chave PIX' },
+  { key: 'chave_pix_tipo',   label: 'Tipo da Chave PIX' },
+  { key: 'comissao_organica',label: 'Comissão Orgânica (%)' },
+  { key: 'comissao_trafego', label: 'Comissão Tráfego (%)' },
+  
+  // Métricas / GMV
+  { key: 'gmv_geral',        label: 'GMV Geral (R$)' },
+  { key: 'gmv_interno_7d',   label: 'GMV Interno 7d (R$)' },
+  { key: 'gmv_interno_14d',  label: 'GMV Interno 14d (R$)' },
+  { key: 'gmv_interno_28d',  label: 'GMV Interno 28d (R$)' },
+  { key: 'gmv_interno_30d',  label: 'GMV Interno 30d (R$)' },
+  
+  // Atividade
+  { key: 'produtos_divulgados', label: 'Produtos Divulgados' },
+  { key: 'whatsapp_group_link', label: 'Link Grupo WhatsApp' },
+  { key: 'videos_7d',        label: 'Vídeos 7d' },
+  { key: 'videos_14d',       label: 'Vídeos 14d' },
+  { key: 'videos_28d',       label: 'Vídeos 28d' },
+  { key: 'videos_30d',       label: 'Vídeos 30d' },
+  { key: 'lives_7d',         label: 'Lives 7d' },
+  { key: 'lives_14d',        label: 'Lives 14d' },
+  { key: 'lives_28d',        label: 'Lives 28d' },
+  { key: 'lives_30d',        label: 'Lives 30d' },
+
+  // Amostra
+  { key: 'codigo_rastreio',  label: 'Código de Rastreio' },
+  { key: 'amostra_enviada',  label: 'Amostra Enviada (true/false)' },
+  { key: 'amostra_data_envio', label: 'Data de Envio Amostra' },
+  { key: 'amostra_observacao', label: 'Observação Amostra' },
+
+  // Deal (Campos específicos para o negócio)
   { key: 'deal_value',       label: 'Valor do Deal (R$)' },
   { key: 'deal_description', label: 'Descrição do Deal' },
+  
   { key: '__ignore__',       label: '— Ignorar campo —' },
 ];
 
@@ -94,7 +140,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
   const handleClose = () => { reset(); onClose(); };
 
   // ── Leitura do arquivo ────────────────────────────────────
-  // Parser CSV nativo — sem dependência externa
   const parseCSVText = (text: string): Record<string, string>[] => {
     const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim());
     if (lines.length < 2) return [];
@@ -132,6 +177,13 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
       else if (lower.includes('categoria') || lower.includes('category')) map[col] = 'category';
       else if (lower.includes('cpf') || lower.includes('cnpj')) map[col] = 'cpf_cnpj';
       else if (lower.includes('obs') || lower.includes('note') || lower.includes('anotacao')) map[col] = 'notes';
+      else if (lower.includes('cep')) map[col] = 'endereco_cep';
+      else if (lower.includes('rua') || lower.includes('logradouro')) map[col] = 'endereco_rua';
+      else if (lower.includes('numero') || lower.includes('number')) map[col] = 'endereco_numero';
+      else if (lower.includes('bairro')) map[col] = 'endereco_bairro';
+      else if (lower.includes('cidade') || lower.includes('city')) map[col] = 'endereco_cidade';
+      else if (lower.includes('estado') || lower.includes('uf')) map[col] = 'endereco_estado';
+      else if (lower.includes('pix')) map[col] = 'chave_pix';
       else map[col] = '__ignore__';
     });
     return map;
@@ -173,7 +225,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
       return;
     }
 
-    // XLSX — carrega SheetJS via CDN dinâmico
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
@@ -202,7 +253,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
     if (file) parseFile(file);
   };
 
-  // ── Carregar usuários ao ir para config ───────────────────
   const goToConfig = async () => {
     const { data } = await supabase
       .from('user_profiles')
@@ -210,19 +260,16 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
       .eq('is_active', true)
       .order('full_name');
     setUsers(data || []);
-    // Pré-selecionar o funil padrão
     const def = funnels.find(f => f.is_default) || funnels[0];
     if (def) { setSelectedFunnelId(def.id); }
     setStep('config');
   };
 
-  // ── Validação do mapeamento ───────────────────────────────
   const missingRequired = () => {
     const mapped = Object.values(mapping);
     return !mapped.includes('name') || !mapped.includes('phone');
   };
 
-  // ── Contagens para review ─────────────────────────────────
   const countErrors = allRows.filter(row => {
     const nameCol = Object.entries(mapping).find(([, v]) => v === 'name')?.[0];
     const phoneCol = Object.entries(mapping).find(([, v]) => v === 'phone')?.[0];
@@ -230,7 +277,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
   }).length;
   const validRows = allRows.length - countErrors;
 
-  // ── Importar ──────────────────────────────────────────────
   const handleImport = async () => {
     setImporting(true);
     const nameCol  = Object.entries(mapping).find(([, v]) => v === 'name')?.[0] || '';
@@ -245,7 +291,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
       const phone = row[phoneCol]?.trim();
       if (!name || !phone) { errors++; continue; }
 
-      // Verificar duplicata por telefone OU CPF/CNPJ
       const cpfCol = Object.entries(mapping).find(([, v]) => v === 'cpf_cnpj')?.[0] || '';
       const cpf = row[cpfCol]?.trim();
 
@@ -273,14 +318,23 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
         if (duplicateMode === 'update') {
           const updateData: Record<string, unknown> = { name, updated_at: new Date().toISOString() };
           Object.entries(mapping).forEach(([col, field]) => {
-            if (field !== '__ignore__' && field !== 'name' && field !== 'phone' && !field.startsWith('deal_') && field !== 'tiktok_main')
-              updateData[field] = row[col] || null;
+            if (field !== '__ignore__' && field !== 'name' && field !== 'phone' && !field.startsWith('deal_') && field !== 'tiktok_main') {
+              const val = row[col]?.trim();
+              if (val) {
+                if (field.includes('gmv') || field.includes('comissao') || field.includes('videos') || field.includes('lives')) {
+                  updateData[field] = parseFloat(val.replace(',', '.')) || 0;
+                } else if (field === 'amostra_enviada') {
+                  updateData[field] = val.toLowerCase() === 'true' || val === '1' || val.toLowerCase() === 'sim';
+                } else {
+                  updateData[field] = val;
+                }
+              }
+            }
           });
           await supabase.from('clients').update(updateData).eq('id', existing.id);
           duplicates++;
           continue;
         }
-        // 'allow' — cria mesmo assim (cai no insert abaixo)
       }
 
       // Montar client
@@ -289,14 +343,35 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
         created_by: user?.id,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        status: 'active',
+        followers: 0,
       };
       const tiktokLinks: string[] = [];
       Object.entries(mapping).forEach(([col, field]) => {
         if (field === '__ignore__' || field === 'name' || field === 'phone' || field.startsWith('deal_')) return;
         if (field === 'tiktok_main') { if (row[col]) tiktokLinks.push(row[col]); return; }
-        if (row[col]) clientData[field] = row[col];
+        
+        const val = row[col]?.trim();
+        if (val) {
+          if (field.includes('gmv') || field.includes('comissao') || field.includes('videos') || field.includes('lives')) {
+            clientData[field] = parseFloat(val.replace(',', '.')) || 0;
+          } else if (field === 'amostra_enviada') {
+            clientData[field] = val.toLowerCase() === 'true' || val === '1' || val.toLowerCase() === 'sim';
+          } else {
+            clientData[field] = val;
+          }
+        }
       });
       if (tiktokLinks.length > 0) clientData.tiktok_links = tiktokLinks;
+      
+      // Fallback para email se não mapeado
+      if (!clientData.email) {
+        clientData.email = name.toLowerCase().replace(/\s+/g, '.') + '@creator.com';
+      }
+      // Fallback para revenue se gmv_geral existir
+      if (clientData.gmv_geral) {
+        clientData.revenue = clientData.gmv_geral;
+      }
 
       const { data: newClient, error: clientErr } = await supabase
         .from('clients').insert([clientData]).select('id').single();
@@ -313,7 +388,7 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
         funnel_id: selectedFunnelId || null,
         assigned_to: assignedTo || null,
         assigned_name: assignedName || null,
-        value: dealValueCol ? parseFloat(row[dealValueCol] || '0') || 0 : 0,
+        value: dealValueCol ? parseFloat(row[dealValueCol]?.replace(',', '.') || '0') || 0 : 0,
         description: dealDescCol ? row[dealDescCol] || null : null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -322,7 +397,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
       imported++;
     }
 
-    // Registrar importação no log
     await supabase.from('lead_imports').insert([{
       created_by: user?.id,
       funnel_id: selectedFunnelId || null,
@@ -352,10 +426,8 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
 
   if (!isOpen) return null;
 
-  // ── UI helpers ────────────────────────────────────────────
   const stepNum = { upload: 1, mapping: 2, config: 3, review: 4, done: 4 };
   const STEPS = ['Upload', 'Mapeamento', 'Configurar', 'Importar'];
-
   const inp = 'w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] bg-white transition-all';
 
   return (
@@ -405,7 +477,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-
           {/* ── STEP 1: UPLOAD ── */}
           {step === 'upload' && (
             <div className="space-y-4">
@@ -414,89 +485,90 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
                 onClick={() => fileRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all
-                  ${dragOver ? 'border-[#5de0e6] bg-[#5de0e6]/5' : 'border-gray-200 hover:border-[#5de0e6]/60 hover:bg-gray-50'}`}>
-                <div className="w-14 h-14 bg-[#004aad]/10 rounded-2xl flex items-center justify-center">
-                  <i className="ri-file-excel-2-line text-[#004aad] text-3xl"></i>
+                className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer
+                  ${dragOver ? 'border-[#5de0e6] bg-[#5de0e6]/5' : 'border-gray-200 hover:border-[#5de0e6]/50 hover:bg-gray-50'}`}
+              >
+                <input type="file" ref={fileRef} className="hidden" accept=".csv,.xlsx,.xls" onChange={e => e.target.files?.[0] && parseFile(e.target.files[0])} />
+                <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <i className="ri-file-excel-2-line text-3xl text-gray-300"></i>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-gray-800">Arraste seu arquivo aqui</p>
-                  <p className="text-xs text-gray-400 mt-0.5">.xlsx, .xls ou .csv — máx. 5.000 linhas</p>
-                </div>
-                <span className="text-xs text-[#004aad] font-medium px-3 py-1.5 border border-[#004aad]/30 rounded-lg hover:bg-[#004aad]/5 transition-colors">
-                  Selecionar arquivo
-                </span>
+                <p className="text-sm font-semibold text-gray-700">Arraste sua planilha ou clique para selecionar</p>
+                <p className="text-xs text-gray-400 mt-1">Suporta arquivos .xlsx, .xls e .csv (UTF-8)</p>
               </div>
-              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
-                onChange={e => { if (e.target.files?.[0]) parseFile(e.target.files[0]); }} />
 
               {uploadError && (
-                <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-100 rounded-xl text-sm text-rose-700">
-                  <i className="ri-error-warning-line text-base flex-shrink-0"></i>{uploadError}
+                <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-2 text-xs text-rose-600">
+                  <i className="ri-error-warning-line text-sm"></i>
+                  {uploadError}
                 </div>
               )}
 
-              {/* Dica de formato */}
-              <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-100">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Dica de formato</p>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  A primeira linha deve ser o cabeçalho. Campos como <strong>Nome</strong> e <strong>Telefone</strong> são detectados automaticamente.
-                  O sistema aceita qualquer nome de coluna e permite mapeamento manual na próxima etapa.
-                </p>
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+                <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <i className="ri-lightbulb-line"></i> Dicas para importação
+                </h4>
+                <ul className="space-y-1.5">
+                  <li className="text-[11px] text-amber-700 flex items-start gap-2">
+                    <span className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 flex-shrink-0"></span>
+                    Certifique-se que a primeira linha contém os nomes das colunas.
+                  </li>
+                  <li className="text-[11px] text-amber-700 flex items-start gap-2">
+                    <span className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 flex-shrink-0"></span>
+                    Os campos <strong>Nome</strong> e <strong>WhatsApp</strong> são obrigatórios.
+                  </li>
+                  <li className="text-[11px] text-amber-700 flex items-start gap-2">
+                    <span className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 flex-shrink-0"></span>
+                    Telefones devem incluir o DDD (ex: 11999999999).
+                  </li>
+                </ul>
               </div>
             </div>
           )}
 
           {/* ── STEP 2: MAPPING ── */}
           {step === 'mapping' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-gray-800">Mapeamento de campos</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{headers.length} colunas encontradas em <span className="font-medium text-gray-600">{fileName}</span></p>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-semibold px-2 py-0.5 bg-rose-50 text-rose-700 rounded-full">Nome *</span>
-                  <span className="text-[11px] font-semibold px-2 py-0.5 bg-rose-50 text-rose-700 rounded-full">WhatsApp *</span>
-                </div>
+                <p className="text-sm text-gray-500">Relacione as colunas da sua planilha com os campos do CRM.</p>
+                <span className="text-[10px] font-bold text-gray-400 uppercase bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                  {headers.length} colunas encontradas
+                </span>
               </div>
 
-              {/* Tabela de mapeamento */}
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <div className="grid grid-cols-2 bg-gray-50 border-b border-gray-200 px-4 py-2">
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Coluna da planilha</p>
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Campo no sistema</p>
-                </div>
-                <div className="divide-y divide-gray-100">
-                  {headers.map(col => (
-                    <div key={col} className="grid grid-cols-2 items-center px-4 py-2.5 hover:bg-gray-50/50 transition-colors">
-                      <div>
-                        <p className="text-sm font-medium text-gray-800 truncate">{col}</p>
-                        <p className="text-[11px] text-gray-400 truncate">{preview[0]?.[col] || '—'}</p>
-                      </div>
+              <div className="space-y-2">
+                {headers.map(header => (
+                  <div key={header} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 group hover:border-[#5de0e6]/30 transition-all">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-gray-700 truncate">{header}</p>
+                      <p className="text-[10px] text-gray-400 truncate mt-0.5 italic">Ex: {preview[0]?.[header] || '—'}</p>
+                    </div>
+                    <i className="ri-arrow-right-line text-gray-300"></i>
+                    <div className="flex-1">
                       <select
-                        value={mapping[col] || '__ignore__'}
-                        onChange={e => setMapping(prev => ({ ...prev, [col]: e.target.value }))}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] cursor-pointer w-full">
+                        value={mapping[header] || '__ignore__'}
+                        onChange={e => setMapping({ ...mapping, [header]: e.target.value })}
+                        className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/20"
+                      >
                         {SYSTEM_FIELDS.map(f => (
-                          <option key={f.key} value={f.key}>{f.label}{f.required ? ' *' : ''}</option>
+                          <option key={f.key} value={f.key}>
+                            {f.label} {f.required ? '*' : ''}
+                          </option>
                         ))}
                       </select>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
 
-              {/* Preview */}
               {preview.length > 0 && (
-                <div>
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Preview — primeiras {preview.length} linhas</p>
-                  <div className="overflow-x-auto rounded-xl border border-gray-100">
-                    <table className="text-xs w-full">
+                <div className="mt-6">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Prévia dos dados (primeiras 5 linhas)</p>
+                  <div className="overflow-x-auto border border-gray-100 rounded-xl">
+                    <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="bg-gray-50 border-b border-gray-100">
+                        <tr className="bg-gray-50/50">
                           {headers.map(h => (
-                            <th key={h} className="px-3 py-2 text-left font-semibold text-gray-500 whitespace-nowrap">{h}</th>
+                            <th key={h} className="px-3 py-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-100">{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -528,7 +600,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
             <div className="space-y-5">
               <p className="text-sm text-gray-500">Configure onde os leads serão inseridos e quem ficará responsável por eles.</p>
 
-              {/* Funil e etapa */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Funil de destino</label>
@@ -548,7 +619,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
                 </div>
               </div>
 
-              {/* Responsável — SOMENTE usuários do sistema */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                   Responsável pelos leads
@@ -562,7 +632,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
                   </div>
                 </div>
 
-                {/* Sem responsável */}
                 <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all mb-1.5
                   ${!assignedTo ? 'border-gray-300 bg-gray-50' : 'border-gray-100 hover:border-gray-200'}`}>
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0
@@ -576,7 +645,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
                   <input type="radio" className="sr-only" checked={!assignedTo} onChange={() => { setAssignedTo(''); setAssignedName(''); }} />
                 </label>
 
-                {/* Lista de usuários */}
                 <div className="space-y-1 max-h-48 overflow-y-auto pr-0.5">
                   {users.map(u => {
                     const sel = assignedTo === u.id;
@@ -606,7 +674,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
                 </div>
               </div>
 
-              {/* Duplicatas */}
               <div>
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Comportamento com duplicatas</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -634,7 +701,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
             <div className="space-y-5">
               <p className="text-sm text-gray-500">Revise o resumo antes de confirmar a importação.</p>
 
-              {/* Resumo contagens */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3.5 text-center">
                   <p className="text-2xl font-bold text-emerald-700">{validRows}</p>
@@ -651,7 +717,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
                 </div>
               </div>
 
-              {/* Destino */}
               <div className="bg-gray-50 rounded-xl border border-gray-100 divide-y divide-gray-100">
                 <div className="flex items-center justify-between px-4 py-2.5">
                   <span className="text-xs text-gray-500">Arquivo</span>
@@ -710,61 +775,76 @@ export default function ImportLeadsModal({ isOpen, onClose, onImported }: Props)
                   <p className="text-[11px] text-rose-600">erros</p>
                 </div>
               </div>
-              <button onClick={handleClose}
-                className="px-6 py-2.5 bg-[#004aad] text-white text-sm font-semibold rounded-xl hover:bg-[#003d91] transition-colors cursor-pointer">
-                Fechar
-              </button>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        {step !== 'done' && (
-          <div className="flex gap-3 px-6 py-4 border-t border-gray-100 flex-shrink-0">
-            {step !== 'upload' && (
-              <button
-                onClick={() => {
-                  if (step === 'mapping') setStep('upload');
-                  if (step === 'config')  setStep('mapping');
-                  if (step === 'review')  setStep('config');
-                }}
-                className="px-4 py-2.5 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer">
-                ← Voltar
-              </button>
-            )}
-            <button onClick={handleClose}
-              className="px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer">
-              Cancelar
-            </button>
-            <div className="flex-1"></div>
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between flex-shrink-0 bg-gray-50/50">
+          {step === 'upload' && (
+            <>
+              <button onClick={handleClose} className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 cursor-pointer">Cancelar</button>
+              <div className="flex items-center gap-2 text-[10px] text-gray-400 font-medium uppercase tracking-widest">
+                <i className="ri-lock-line"></i> Ambiente Seguro
+              </div>
+            </>
+          )}
 
-            {step === 'upload' && (
-              <button disabled className="px-5 py-2.5 text-sm font-semibold text-white bg-gray-200 rounded-xl cursor-not-allowed opacity-50">
-                Próximo →
+          {step === 'mapping' && (
+            <>
+              <button onClick={() => setStep('upload')} className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 cursor-pointer">Voltar</button>
+              <button
+                onClick={goToConfig}
+                disabled={missingRequired()}
+                className="px-6 py-2 bg-[#004aad] text-white text-sm font-bold rounded-xl hover:bg-[#003d91] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-[#004aad]/20"
+              >
+                Continuar
               </button>
-            )}
-            {step === 'mapping' && (
-              <button onClick={goToConfig} disabled={missingRequired()}
-                className="px-5 py-2.5 text-sm font-semibold text-white bg-[#004aad] hover:bg-[#003d91] rounded-xl transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
-                Próximo →
+            </>
+          )}
+
+          {step === 'config' && (
+            <>
+              <button onClick={() => setStep('mapping')} className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 cursor-pointer">Voltar</button>
+              <button
+                onClick={() => setStep('review')}
+                disabled={!selectedFunnelId}
+                className="px-6 py-2 bg-[#004aad] text-white text-sm font-bold rounded-xl hover:bg-[#003d91] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-[#004aad]/20"
+              >
+                Revisar Importação
               </button>
-            )}
-            {step === 'config' && (
-              <button onClick={() => setStep('review')} disabled={!selectedFunnelId}
-                className="px-5 py-2.5 text-sm font-semibold text-white bg-[#004aad] hover:bg-[#003d91] rounded-xl transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
-                Revisar →
+            </>
+          )}
+
+          {step === 'review' && (
+            <>
+              <button onClick={() => setStep('config')} className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 cursor-pointer" disabled={importing}>Voltar</button>
+              <button
+                onClick={handleImport}
+                disabled={importing || validRows === 0}
+                className="px-8 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-600/20 flex items-center gap-2"
+              >
+                {importing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Importando...
+                  </>
+                ) : (
+                  <>
+                    <i className="ri-check-double-line text-lg"></i>
+                    Confirmar e Importar
+                  </>
+                )}
               </button>
-            )}
-            {step === 'review' && (
-              <button onClick={handleImport} disabled={importing || validRows === 0}
-                className="px-5 py-2.5 text-sm font-semibold text-white bg-[#004aad] hover:bg-[#003d91] rounded-xl transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2">
-                {importing
-                  ? <><i className="ri-loader-4-line animate-spin"></i>Importando...</>
-                  : <><i className="ri-download-cloud-line"></i>Importar {validRows} leads</>}
-              </button>
-            )}
-          </div>
-        )}
+            </>
+          )}
+
+          {step === 'done' && (
+            <button onClick={handleClose} className="w-full py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-black transition-all">
+              Fechar Janela
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
