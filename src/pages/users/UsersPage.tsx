@@ -99,7 +99,6 @@ export default function UsersPage() {
   }, [loadAvailableRoles]);
 
   const getPermsForRole = (role: string) => {
-    // Prioriza permissões customizadas do FuncoesModule, cai para hardcoded
     return dynamicRolePerms[role] || defaultRolePermissions[role as keyof typeof defaultRolePermissions] || defaultRolePermissions.viewer;
   };
 
@@ -136,7 +135,8 @@ export default function UsersPage() {
     setShowModal(true);
   };
 
-  const handleSaveUser = async (updatedUser: Partial<UserProfile>) => {
+  // ✅ FIX: handleSaveUser now persists allowed_funnels to Supabase
+  const handleSaveUser = async (updatedUser: Partial<UserProfile> & { allowed_funnels?: string[] }) => {
     if (!selectedUser) return;
     try {
       const { error } = await supabase
@@ -145,6 +145,7 @@ export default function UsersPage() {
           role: updatedUser.role,
           permissions: updatedUser.permissions,
           is_active: updatedUser.is_active,
+          allowed_funnels: updatedUser.allowed_funnels ?? [],  // ✅ FIXED: was missing
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedUser.id);
@@ -157,7 +158,7 @@ export default function UsersPage() {
         entityId: selectedUser.id,
         entityName: selectedUser.full_name,
         details: { 
-          before: { role: selectedUser.role, permissions: selectedUser.permissions, is_active: selectedUser.is_active },
+          before: { role: selectedUser.role, permissions: selectedUser.permissions, is_active: selectedUser.is_active, allowed_funnels: (selectedUser as any).allowed_funnels },
           after: updatedUser
         }
       });
@@ -552,12 +553,14 @@ function CreateUserModal({ isOpen, onClose, onCreate, availableRoles }: CreateUs
 interface EditUserModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (user: Partial<UserProfile>) => Promise<void>;
+  // ✅ FIX: onSave now accepts allowed_funnels
+  onSave: (user: Partial<UserProfile> & { allowed_funnels?: string[] }) => Promise<void>;
   user: UserProfile;
+  getPermsForRole: (role: string) => any;
   availableRoles: RoleOption[];
 }
 
-function EditUserModal({ isOpen, onClose, onSave, user, getPermsForRole, availableRoles }: EditUserModalProps & { getPermsForRole: (role: string) => any }) {
+function EditUserModal({ isOpen, onClose, onSave, user, getPermsForRole, availableRoles }: EditUserModalProps) {
   const [activeTab, setActiveTab] = useState<'dados' | 'permissoes' | 'funis'>('dados');
   const [role, setRole] = useState<string>(user.role);
   const [isActive, setIsActive] = useState(user.is_active);
@@ -591,6 +594,7 @@ function EditUserModal({ isOpen, onClose, onSave, user, getPermsForRole, availab
     }));
   };
 
+  // ✅ FIX: handleSave now includes allowedFunnels
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -598,6 +602,7 @@ function EditUserModal({ isOpen, onClose, onSave, user, getPermsForRole, availab
         role,
         permissions: perms,
         is_active: isActive,
+        allowed_funnels: allowedFunnels,  // ✅ FIXED: was missing
       });
       onClose();
     } catch (error) {
@@ -709,7 +714,7 @@ function EditUserModal({ isOpen, onClose, onSave, user, getPermsForRole, availab
             <p className="text-sm text-gray-600">Selecione os funis que este usuário terá acesso. Se nenhum for selecionado, terá acesso a todos.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {funnels.map(funnel => (
-                <label key={funnel.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-white cursor-pointer">
+                <label key={funnel.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-white cursor-pointer hover:border-gray-200 transition-colors">
                   <input
                     type="checkbox"
                     checked={allowedFunnels.includes(funnel.id)}
@@ -723,16 +728,28 @@ function EditUserModal({ isOpen, onClose, onSave, user, getPermsForRole, availab
                     className="w-4 h-4 rounded text-brand-600"
                   />
                   <span className="text-sm font-medium text-gray-700">{funnel.name}</span>
-                  <span className={`w-2 h-2 rounded-full`} style={{ backgroundColor: funnel.color }}></span>
+                  <span className="w-2 h-2 rounded-full ml-auto flex-shrink-0" style={{ backgroundColor: funnel.color }}></span>
                 </label>
               ))}
             </div>
+            {allowedFunnels.length > 0 && (
+              <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                <i className="ri-information-line mr-1"></i>
+                {allowedFunnels.length} funil(is) selecionado(s). Usuário verá apenas estes funis.
+              </p>
+            )}
+            {allowedFunnels.length === 0 && (
+              <p className="text-xs text-gray-400 bg-gray-50 px-3 py-2 rounded-lg">
+                <i className="ri-information-line mr-1"></i>
+                Nenhum funil selecionado — usuário terá acesso a todos os funis.
+              </p>
+            )}
           </div>
         )}
       </div>
 
       <div className="mt-6 flex justify-end gap-3">
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+        <Button variant="secondary" onClick={onClose}>Cancelar</Button>
         <Button onClick={handleSave} loading={saving}>Salvar Alterações</Button>
       </div>
     </Modal>
