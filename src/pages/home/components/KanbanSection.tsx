@@ -56,7 +56,6 @@ const HIDE_CLOSED_KEY = 'crm_kanban_hide_closed';
 function loadHideClosed(): boolean {
   try {
     const saved = localStorage.getItem(HIDE_CLOSED_KEY);
-    // Se não houver valor salvo, o padrão é FALSE (mostrar etapas finais)
     if (saved === null) return false;
     return saved === 'true';
   } catch {
@@ -94,7 +93,9 @@ export default function KanbanSection() {
   const [outcomeReasons, setOutcomeReasons] = useState<{ id: string; name: string; type: string }[]>([]);
   const [selectedReason, setSelectedReason] = useState('');
   const [customReason, setCustomReason] = useState('');
-  const { user } = useAuth();
+
+  // ✅ FIX: também desestruturar `profile` para acessar allowed_funnels
+  const { user, profile } = useAuth();
   const { logActivity } = useActivityLog();
   const { logClientEvent } = useClientHistory();
 
@@ -103,18 +104,34 @@ export default function KanbanSection() {
       .eq('is_active', true).order('sort_order')
       .then(({ data }) => { if (data) setOutcomeReasons(data); });
   }, []);
+
   const { executeAutomations } = useStageAutomations();
-  
   const canDeleteDeals = useAuth().hasPermission('deals', 'delete');
-  
-  // Hooks de funis
-  const { 
-    funnels, 
-    loading: funnelsLoading, 
-    selectedFunnelId, 
-    selectFunnel 
+
+  // Hooks de funis — carrega TODOS os funis do banco
+  const {
+    funnels,
+    loading: funnelsLoading,
+    selectedFunnelId,
+    selectFunnel
   } = useFunnels();
-  
+
+  // ✅ FIX: Filtrar funis pelo allowed_funnels do perfil do usuário.
+  // Regra: array vazio = acesso a todos (padrão para admins e usuários sem restrição).
+  const allowedFunnelIds: string[] = (profile as any)?.allowed_funnels ?? [];
+  const accessibleFunnels = allowedFunnelIds.length > 0
+    ? funnels.filter(f => allowedFunnelIds.includes(f.id))
+    : funnels;
+
+  // ✅ FIX: Se o funil selecionado não está na lista de acessíveis, selecionar o primeiro disponível.
+  useEffect(() => {
+    if (funnelsLoading || accessibleFunnels.length === 0) return;
+    const hasAccess = accessibleFunnels.some(f => f.id === selectedFunnelId);
+    if (!hasAccess) {
+      selectFunnel(accessibleFunnels[0].id);
+    }
+  }, [accessibleFunnels.map(f => f.id).join(','), selectedFunnelId, funnelsLoading]);
+
   const { stages, loading: stagesLoading, saveStages, reloadStages } = useFunnelStages(selectedFunnelId || undefined);
 
   const loadData = useCallback(async () => {
@@ -170,7 +187,11 @@ export default function KanbanSection() {
     const dealId = searchParams.get('dealId');
 
     if (funnelId && funnelId !== selectedFunnelId) {
-      selectFunnel(funnelId);
+      // Só navegar para o funil da URL se o usuário tiver acesso a ele
+      const hasAccess = accessibleFunnels.some(f => f.id === funnelId);
+      if (hasAccess) {
+        selectFunnel(funnelId);
+      }
     }
 
     if (dealId && deals.length > 0) {
@@ -180,7 +201,7 @@ export default function KanbanSection() {
         setIsDetailOpen(true);
       }
     }
-  }, [searchParams, deals, selectedFunnelId, selectFunnel]);
+  }, [searchParams, deals, selectedFunnelId, selectFunnel, accessibleFunnels]);
 
   // Filtrar deals pelo funil selecionado
   const filteredDealsByFunnel = deals.filter(deal => deal.funnel_id === selectedFunnelId);
@@ -249,7 +270,7 @@ export default function KanbanSection() {
           .update({ ...data, updated_at: new Date().toISOString() })
           .eq('id', selectedDeal.id);
         if (error) throw error;
-        
+
         await logActivity({
           action: 'update',
           module: 'deals',
@@ -260,15 +281,15 @@ export default function KanbanSection() {
       } else {
         const { data: newDeal, error } = await supabase
           .from('deals')
-          .insert([{ 
-            ...data, 
+          .insert([{
+            ...data,
             created_by: user?.id,
-            funnel_id: selectedFunnelId 
+            funnel_id: selectedFunnelId
           }])
           .select()
           .single();
         if (error) throw error;
-        
+
         await logActivity({
           action: 'create',
           module: 'deals',
@@ -289,7 +310,7 @@ export default function KanbanSection() {
       const dealToDelete = deals.find(d => d.id === id);
       const { error } = await supabase.from('deals').delete().eq('id', id);
       if (error) throw error;
-      
+
       if (dealToDelete) {
         await logActivity({
           action: 'delete',
@@ -299,7 +320,7 @@ export default function KanbanSection() {
           details: { deletedData: dealToDelete }
         });
       }
-      
+
       await loadData();
     } catch (error) {
       console.error('Erro ao excluir negociação:', error);
@@ -318,62 +339,60 @@ export default function KanbanSection() {
     if (!deal) return;
     try {
       const { error } = await supabase
-          .from('deals')
-          .update({ stage: stageId, updated_at: new Date().toISOString() })
-          .eq('id', draggedDeal.id);
-        if (error) throw error;
-        
-        const oldStage = stages.find(s => s.id === draggedDeal.stage);
-        const newStage = stages.find(s => s.id === stageId);
-        
-        const fromStage = oldStage?.label || draggedDeal.stage;
-        const toStage = newStage?.label || stageId;
-        
-        await logActivity({
-          action: 'update',
-          module: 'deals',
-          entityId: draggedDeal.id,
-          entityName: draggedDeal.title,
-          details: { 
-            action: 'move_stage',
-            from: fromStage,
-            to: toStage,
-            message: `Etapa alterada de "${fromStage}" para "${toStage}"`
-          }
-        });
-        
-        if (draggedDeal.client_id) {
-          await logClientEvent({
-            client_id: draggedDeal.client_id,
-            ...historyEvent.movimentacao(
-              oldStage?.label || draggedDeal.stage,
-              newStage?.label || stageId,
-              draggedDeal.title
-            )
-          });
-        }
+        .from('deals')
+        .update({ stage: stageId, updated_at: new Date().toISOString() })
+        .eq('id', draggedDeal.id);
+      if (error) throw error;
 
-        // 🤖 Disparar automações configuradas para esta etapa
-        await executeAutomations(
-          stageId,
-          draggedDeal.id,
-          draggedDeal.client_id || null,
-          draggedDeal.title,
-          draggedDeal.client_name || '',
-          newStage?.label || stageId
-        );
-        
-        await loadData();
-      } catch (error) {
-        console.error('Erro ao mover negociação:', error);
+      const oldStage = stages.find(s => s.id === draggedDeal.stage);
+      const newStage = stages.find(s => s.id === stageId);
+
+      const fromStage = oldStage?.label || draggedDeal.stage;
+      const toStage = newStage?.label || stageId;
+
+      await logActivity({
+        action: 'update',
+        module: 'deals',
+        entityId: draggedDeal.id,
+        entityName: draggedDeal.title,
+        details: {
+          action: 'move_stage',
+          from: fromStage,
+          to: toStage,
+          message: `Etapa alterada de "${fromStage}" para "${toStage}"`
+        }
+      });
+
+      if (draggedDeal.client_id) {
+        await logClientEvent({
+          client_id: draggedDeal.client_id,
+          ...historyEvent.movimentacao(
+            oldStage?.label || draggedDeal.stage,
+            newStage?.label || stageId,
+            draggedDeal.title
+          )
+        });
       }
+
+      await executeAutomations(
+        stageId,
+        draggedDeal.id,
+        draggedDeal.client_id || null,
+        draggedDeal.title,
+        draggedDeal.client_name || '',
+        newStage?.label || stageId
+      );
+
+      await loadData();
+    } catch (error) {
+      console.error('Erro ao mover negociação:', error);
+    }
   };
 
   const handleDrop = async (stageId: string) => {
     if (draggedDeal && draggedDeal.stage !== stageId) {
       const targetStage = stages.find(s => s.id === stageId);
-      
-      // Verificar se a etapa de destino possui tarefa obrigatória
+
       if (targetStage?.mandatory_task_title) {
         setPendingMandatoryTask({ deal: draggedDeal, stage: targetStage });
         setDraggedDeal(null);
@@ -402,12 +421,11 @@ export default function KanbanSection() {
     setDragOverStage(null);
   };
 
-  // --- Export CSV ---
   const handleExport = () => {
-    const selectedFunnel = funnels.find(f => f.id === selectedFunnelId);
+    const selectedFunnel = accessibleFunnels.find(f => f.id === selectedFunnelId);
     const csvData = filteredDeals.map(deal => {
       const stage = stages.find(s => s.id === deal.stage);
-      const funnel = funnels.find(f => f.id === deal.funnel_id);
+      const funnel = accessibleFunnels.find(f => f.id === deal.funnel_id);
       return {
         'Negociação': deal.title,
         'Cliente': deal.client_name || '',
@@ -435,14 +453,12 @@ export default function KanbanSection() {
     link.click();
   };
 
-  // --- Reload ---
   const handleReload = async () => {
     setIsReloading(true);
     await Promise.all([loadData(), reloadStages()]);
     setTimeout(() => setIsReloading(false), 600);
   };
 
-  // --- Funnel Config ---
   const handleSaveFunnel = async (newStages: { id: string; label: string; color: string }[]) => {
     const mapped = newStages.map((s, i) => ({
       id: s.id,
@@ -469,7 +485,6 @@ export default function KanbanSection() {
     : stages;
 
   const getStageDeals = (stageId: string) => sortedDeals.filter(d => d.stage === stageId);
-
   const getStageValue = (stageId: string) =>
     getStageDeals(stageId).reduce((sum, d) => sum + Number(d.value ?? 0), 0);
 
@@ -481,6 +496,21 @@ export default function KanbanSection() {
     return (
       <div className="flex items-center justify-center h-64">
         <i className="ri-loader-4-line text-4xl text-[#5de0e6] animate-spin"></i>
+      </div>
+    );
+  }
+
+  // ✅ FIX: Mensagem amigável se usuário não tem acesso a nenhum funil
+  if (accessibleFunnels.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center">
+          <i className="ri-lock-line text-3xl text-amber-400"></i>
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-semibold text-gray-700">Nenhum funil disponível</p>
+          <p className="text-xs text-gray-400 mt-1">Você não possui acesso a nenhum funil. Contate o administrador.</p>
+        </div>
       </div>
     );
   }
@@ -518,7 +548,8 @@ export default function KanbanSection() {
           hideClosedStages={hideClosedStages}
           onToggleClosedStages={handleToggleClosedStages}
           selectedFunnelId={selectedFunnelId}
-          funnels={funnels.map(f => ({ id: f.id, name: f.name, color: f.color }))}
+          // ✅ FIX: passar apenas os funis acessíveis ao usuário
+          funnels={accessibleFunnels.map(f => ({ id: f.id, name: f.name, color: f.color }))}
           currentUserId={user?.id}
           onFunnelChange={selectFunnel}
         />
@@ -549,7 +580,8 @@ export default function KanbanSection() {
         <KanbanListView
           deals={sortedDeals}
           stages={stages}
-          funnels={funnels.map(f => ({ id: f.id, name: f.name, color: f.color }))}
+          // ✅ FIX: também filtrar na lista
+          funnels={accessibleFunnels.map(f => ({ id: f.id, name: f.name, color: f.color }))}
           onEdit={handleViewDeal}
           onDelete={handleDeleteDeal}
           canDelete={canDeleteDeals}
@@ -617,7 +649,6 @@ export default function KanbanSection() {
       {pendingDrop && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${(pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_')) ? 'bg-emerald-50' : 'bg-rose-50'}`}>
                 <i className={`${(pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_')) ? 'ri-checkbox-circle-line text-emerald-600' : 'ri-close-circle-line text-rose-600'} text-lg`}></i>
@@ -642,36 +673,34 @@ export default function KanbanSection() {
                     <input type="radio" className="sr-only" checked={selectedReason === r.id} onChange={() => { setSelectedReason(r.id); setCustomReason(''); }} />
                   </label>
                 ))}
-                {/* Opção outro */}
                 <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedReason === '__outro' ? (pendingDrop.stageId === 'won' ? 'border-emerald-400 bg-emerald-50' : 'border-rose-400 bg-rose-50') : 'border-gray-100 hover:border-gray-200'}`}>
                   <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selectedReason === '__outro' ? (pendingDrop.stageId === 'won' ? 'border-emerald-500 bg-emerald-500' : 'border-rose-500 bg-rose-500') : 'border-gray-300'}`}>
                     {selectedReason === '__outro' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
                   </div>
-                    <span className="text-sm text-gray-700">Outro motivo</span>
-                    <input type="radio" className="sr-only" checked={selectedReason === '__outro'} onChange={() => setSelectedReason('__outro')} />
-                  </label>
-                </div>
-
-                {/* Campo de justificativa manual - OBRIGATÓRIO */}
-                <div className="mt-4 space-y-2">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
-                    <span>Justificativa Obrigatória</span>
-                    <span className="text-rose-500">*</span>
-                  </p>
-                  <textarea
-                    value={customReason}
-                    onChange={e => setCustomReason(e.target.value)}
-                    placeholder="Descreva detalhadamente o motivo da perda/ganho..."
-                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] min-h-[80px] resize-none"
-                  />
-                  {!customReason.trim() && selectedReason && (
-                    <p className="text-xs text-rose-500 flex items-center gap-1">
-                      <i className="ri-error-warning-line"></i>
-                      Campo obrigatório
-                    </p>
-                  )}
-                </div>
+                  <span className="text-sm text-gray-700">Outro motivo</span>
+                  <input type="radio" className="sr-only" checked={selectedReason === '__outro'} onChange={() => setSelectedReason('__outro')} />
+                </label>
               </div>
+
+              <div className="mt-4 space-y-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                  <span>Justificativa Obrigatória</span>
+                  <span className="text-rose-500">*</span>
+                </p>
+                <textarea
+                  value={customReason}
+                  onChange={e => setCustomReason(e.target.value)}
+                  placeholder="Descreva detalhadamente o motivo da perda/ganho..."
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#5de0e6]/30 focus:border-[#5de0e6] min-h-[80px] resize-none"
+                />
+                {!customReason.trim() && selectedReason && (
+                  <p className="text-xs text-rose-500 flex items-center gap-1">
+                    <i className="ri-error-warning-line"></i>
+                    Campo obrigatório
+                  </p>
+                )}
+              </div>
+            </div>
 
             <div className="flex gap-2 px-5 pb-5">
               <button onClick={() => { setPendingDrop(null); setSelectedReason(''); setCustomReason(''); }}
@@ -683,37 +712,31 @@ export default function KanbanSection() {
                 onClick={async () => {
                   const baseReason = outcomeReasons.find(r => r.id === selectedReason)?.name || (selectedReason === '__outro' ? 'Outro' : '');
                   const additionalJustification = customReason.trim();
-                  
-                  // A justificativa manual é sempre obrigatória e concatenada com o motivo selecionado
-                  const finalReason = selectedReason === '__outro' 
-                    ? additionalJustification 
+                  const finalReason = selectedReason === '__outro'
+                    ? additionalJustification
                     : `${baseReason} - ${additionalJustification}`;
 
                   const isLost = !(pendingDrop.stageId === 'won' || pendingDrop.stageId.startsWith('won_'));
-                  
-                  // Salvar motivo junto com a atualização do stage
+
                   await supabase.from('deals').update({
                     stage: pendingDrop.stageId,
                     outcome_reason: finalReason,
                     updated_at: new Date().toISOString(),
                   }).eq('id', pendingDrop.dealId);
-                  
-                  // Log Geral do Sistema
+
                   await logActivity({
                     action: 'update', module: 'deals',
                     entityId: pendingDrop.dealId, entityName: pendingDrop.dealTitle,
-                    details: { 
-                      action: 'move_stage', 
-                      to: pendingDrop.stageId, 
+                    details: {
+                      action: 'move_stage',
+                      to: pendingDrop.stageId,
                       reason: finalReason,
                       is_outcome: true,
                       outcome_type: isLost ? 'lost' : 'won'
                     },
                   });
 
-                  // Log no Histórico do Creator
                   if (pendingDrop.dealId) {
-                    // Buscar o client_id do deal para registrar no histórico do creator
                     const { data: dealData } = await supabase
                       .from('deals')
                       .select('client_id, stage')
@@ -723,20 +746,19 @@ export default function KanbanSection() {
                     if (dealData?.client_id) {
                       const fromStageLabel = stages.find(s => s.id === (deals.find(d => d.id === pendingDrop.dealId)?.stage))?.label || 'Etapa anterior';
                       const toStageLabel = stages.find(s => s.id === pendingDrop.stageId)?.label || (isLost ? 'Perdido' : 'Ganho');
-                      
+
                       await logClientEvent({
                         client_id: dealData.client_id,
                         ...historyEvent.movimentacao(fromStageLabel, toStageLabel, pendingDrop.dealTitle)
                       });
 
-                      // Log específico de perda/ganho com a justificativa
                       await logClientEvent({
                         client_id: dealData.client_id,
                         event_type: 'resultado',
                         title: isLost ? 'Negociação Perdida' : 'Negociação Ganha',
                         description: `Motivo/Justificativa: ${finalReason}`,
-                        metadata: { 
-                          deal_id: pendingDrop.dealId, 
+                        metadata: {
+                          deal_id: pendingDrop.dealId,
                           deal_title: pendingDrop.dealTitle,
                           reason: finalReason,
                           outcome: isLost ? 'lost' : 'won'
@@ -744,7 +766,7 @@ export default function KanbanSection() {
                       });
                     }
                   }
-                  
+
                   setPendingDrop(null); setSelectedReason(''); setCustomReason('');
                   await loadData();
                 }}
@@ -756,7 +778,6 @@ export default function KanbanSection() {
         </div>
       )}
 
-      {/* StageAutomationsModal */}
       {automationsStage && (
         <StageAutomationsModal
           isOpen={!!automationsStage}
@@ -768,7 +789,6 @@ export default function KanbanSection() {
         />
       )}
 
-      {/* Export toast */}
       {exportToast && (
         <div className="fixed bottom-6 right-6 z-50 animate-[fadeIn_0.2s_ease-out]">
           <div className="flex items-center gap-3 bg-gray-900 text-white px-5 py-3.5 rounded-xl shadow-2xl">
